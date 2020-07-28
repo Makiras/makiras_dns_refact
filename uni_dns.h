@@ -1,10 +1,10 @@
 /*
- * @Description: DNS standard param and functions
+ * @Description: 
  * @Author: Makiras
- * @Date: 2020-07-26 13:41:36
+ * @Date: 2020-07-27 15:37:28
  * @LastEditors: Makiras
- * @LastEditTime: 2020-07-27 20:17:17
- * @FilePath: /makiras_dns/uni_dns.h
+ * @LastEditTime: 2020-07-28 15:52:39
+ * @FilePath: /makiras_dns_refact/uni_dns.h
  */
 
 /*
@@ -145,6 +145,28 @@ struct dns_packet
   dns_rr* records;
 };
 
+typedef struct dns_packet DnsPacket;
+typedef struct dns_header DnsHeader;
+typedef struct dns_rr DnsRR;
 
+/*
+  Decode:
+    Decode from raw bytestream, using ntohs() convert and using ptr* iter the RAW PACK
+  Encode:
+    Encode from readable struct, using htons() convert and using ptr* to append behind the RAW_PACK
+*/
+
+
+// Decode/Encode RAW&packet
+char* _dns_decode_packet(char* raw_pack, DnsPacket* packet);
+int _dns_encode_packet(char* raw_pack, DnsPacket* packet);
+
+// Decode/Endcode RAW&Header
+char* _dns_decode_header(char* pack_ptr,DnsHeader* header);
+int _dns_encode_header(char* pack_ptr,DnsHeader* header);
+
+// Decode/Endcode RAW&RR
+char* _dns_decode_RR(char* rr_ptr,DnsRR* rr);
+int _dns_encode_RR(char* rr_ptr,DnsRR* rr);
 
 #endif
