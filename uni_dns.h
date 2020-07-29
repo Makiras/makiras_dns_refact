@@ -3,7 +3,7 @@
  * @Author: Makiras
  * @Date: 2020-07-27 15:37:28
  * @LastEditors: Makiras
- * @LastEditTime: 2020-07-28 15:52:39
+ * @LastEditTime: 2020-07-29 12:55:40
  * @FilePath: /makiras_dns_refact/uni_dns.h
  */
 
@@ -109,7 +109,7 @@ cshort DNS_OPT_CODE_KEEPALIVE = 11;
 cshort DNS_OPT_CODE_ALL = 255;
 
 // DNS Header Object
-struct dns_header
+typedef struct dns_header
 {
   uint16_t id;
   uint8_t qr;
@@ -123,31 +123,28 @@ struct dns_header
   uint16_t ancount;
   uint16_t nscount;
   uint16_t arcount;
-};
+} DnsHeader;
 
 // DNS Resource Record Object
-struct dns_rr
+typedef struct dns_rr
 {
-  dns_rr* next = NULL;
+  DnsRR* next;
   uint16_t len;
-  uint16_t* name;  // dynamic length name
+  uint8_t* name;  // dynamic length name
   uint16_t type;   // Resource Record Type (16 bit)
   uint16_t cls;
   uint32_t ttl;
   uint16_t rdlength; // rdata length in
-  uint16_t* rdata;  // rdata
-};
+  uint8_t* rdata;  // rdata
+} DnsRR;
 
 // DNS Packet(Logical)
-struct dns_packet
+typedef struct dns_packet
 {
-  dns_header header;
-  dns_rr* records;
-};
+  DnsHeader header;
+  DnsRR* records;
+} DnsPacket;
 
-typedef struct dns_packet DnsPacket;
-typedef struct dns_header DnsHeader;
-typedef struct dns_rr DnsRR;
 
 /*
   Decode:
@@ -162,8 +159,8 @@ char* _dns_decode_packet(char* raw_pack, DnsPacket* packet);
 int _dns_encode_packet(char* raw_pack, DnsPacket* packet);
 
 // Decode/Endcode RAW&Header
-char* _dns_decode_header(char* pack_ptr,DnsHeader* header);
-int _dns_encode_header(char* pack_ptr,DnsHeader* header);
+char* _dns_decode_header(char* header_ptr,DnsHeader* header);
+int _dns_encode_header(char* header_ptr,DnsHeader* header);
 
 // Decode/Endcode RAW&RR
 char* _dns_decode_RR(char* rr_ptr,DnsRR* rr);
