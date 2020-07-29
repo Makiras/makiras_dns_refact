@@ -3,7 +3,7 @@
  * @Author: Makiras
  * @Date: 2020-07-27 15:37:28
  * @LastEditors: Makiras
- * @LastEditTime: 2020-07-29 12:55:40
+ * @LastEditTime: 2020-07-29 17:50:21
  * @FilePath: /makiras_dns_refact/uni_dns.h
  */
 
@@ -128,23 +128,22 @@ typedef struct dns_header
 // DNS Resource Record Object
 typedef struct dns_rr
 {
-  DnsRR* next;
-  uint16_t len;
-  uint8_t* name;  // dynamic length name
-  uint16_t type;   // Resource Record Type (16 bit)
+  DnsRR *next;
+  uint16_t len;  // not used for now
+  uint8_t *name; // dynamic length name
+  uint16_t type; // Resource Record Type (16 bit)
   uint16_t cls;
   uint32_t ttl;
   uint16_t rdlength; // rdata length in
-  uint8_t* rdata;  // rdata
+  uint8_t *rdata;    // rdata
 } DnsRR;
 
 // DNS Packet(Logical)
 typedef struct dns_packet
 {
   DnsHeader header;
-  DnsRR* records;
+  DnsRR *records;
 } DnsPacket;
-
 
 /*
   Decode:
@@ -153,17 +152,16 @@ typedef struct dns_packet
     Encode from readable struct, using htons() convert and using ptr* to append behind the RAW_PACK
 */
 
-
 // Decode/Encode RAW&packet
-char* _dns_decode_packet(char* raw_pack, DnsPacket* packet);
-int _dns_encode_packet(char* raw_pack, DnsPacket* packet);
+void _dns_decode_packet(char *raw_pack, DnsPacket *packet);
+void _dns_encode_packet(char *raw_pack, DnsPacket *packet);
 
 // Decode/Endcode RAW&Header
-char* _dns_decode_header(char* header_ptr,DnsHeader* header);
-int _dns_encode_header(char* header_ptr,DnsHeader* header);
+char *_dns_decode_header(char *header_ptr, DnsHeader *header);
+char *_dns_encode_header(char *raw_ptr, DnsHeader *header);
 
 // Decode/Endcode RAW&RR
-char* _dns_decode_RR(char* rr_ptr,DnsRR* rr);
-int _dns_encode_RR(char* rr_ptr,DnsRR* rr);
+char *_dns_decode_RR(char *rr_ptr, DnsRR *rr);
+char *_dns_encode_RR(char *rr_ptr, DnsRR *rr);
 
 #endif
