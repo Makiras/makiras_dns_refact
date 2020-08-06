@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "Makiras",
         "ancount",
         "cdouble",
         "cint",
@@ -10,8 +11,14 @@
         "dsotypeni",
         "h",
         "in",
+        "libuv",
+        "mingw",
+        "mirrorlist",
+        "msys",
+        "pacman",
         "rcls",
         "rcode",
+        "toolchain",
         "udefine",
         "udefine h"
     ]
