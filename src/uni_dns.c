@@ -44,7 +44,7 @@ char *decode_RR_name(char *raw_pack,char **rrn_ptr)
     // determine if there is pointer compression
     int is_compression=0;
     if((*now_ptr)&0xc0){
-        now_ptr=raw_pack+(((uint16_t)((*now_ptr)|0x3f)<<8)+(*(now_ptr+1))); // big-endian
+        now_ptr=raw_pack+(((uint16_t)((*now_ptr)&0x3f)<<8)+(*(now_ptr+1))); // big-endian
         is_compression=1;
     }
 
@@ -67,8 +67,20 @@ char *decode_RR_name(char *raw_pack,char **rrn_ptr)
 
 char *encode_RR_name(char *raw_ptr, char *name_ptr)
 {
-    // todo: encode rr name, WATCH: byte order, bits%16 = 0;
-    return raw_ptr;
+    int length=strlen(name_ptr);
+    *raw_ptr='.';
+    memcpy(raw_ptr+1,name_ptr,length);
+    uint8_t fragment_length=0; //such as len('www') or len('com') , etc
+    char* ptr=raw_ptr+length;
+    while(ptr!=raw_ptr-1){
+        if(*ptr=='.'){
+            (*ptr)=(uint8_t)fragment_length;
+            fragment_length=0;
+        }
+        else fragment_length+=1;
+        ptr--;
+    }
+    return raw_ptr+length+1;
 }
 
 // Free raw pack data after decode
