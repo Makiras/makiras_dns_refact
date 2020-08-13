@@ -1,0 +1,3 @@
+cmake_minimum_required(VERSION 3.17)
+AUX_SOURCE_DIRECTORY(. DIR_SRCS)
+ADD_EXECUTABLE(Dns ${DIR_SRCS})

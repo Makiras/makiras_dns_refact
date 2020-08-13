@@ -36,11 +36,32 @@ char *_write_uint32(char *ptr, uint32_t value)
     return ptr + 4;
 }
 
-char *decode_RR_name(char **rrn_ptr)
+char *decode_RR_name(char *raw_pack,char **rrn_ptr)
 {
     char *rname = (char *)malloc(sizeof(uint8_t) * DNS_NSD_LEN_CNAME);
     char *now_ptr = *rrn_ptr;
-    // todo: read name & write name
+
+    // determine if there is pointer compression
+    int is_compression=0;
+    if((*now_ptr)&0xc0){
+        now_ptr=raw_pack+(((uint16_t)((*now_ptr)|0x3f)<<8)+(*(now_ptr+1))); // big-endian
+        is_compression=1;
+    }
+
+    char* current_name_ptr=rname;
+    while(*now_ptr!=0){
+        int length=*now_ptr++;
+        memcpy(current_name_ptr,now_ptr,length);
+        current_name_ptr+=length;
+        *current_name_ptr++='.';
+        now_ptr+=length;
+    }
+    *current_name_ptr='\0';
+
+    // modify rrn_ptr
+    if(is_compression)*rrn_ptr=(*rrn_ptr)+2;
+    else *rrn_ptr=now_ptr;
+
     return rname;
 }
 
@@ -59,7 +80,7 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
     while (rr_count--) // Iter raw packet and append RRs
     {
         DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR));
-        now_ptr = _dns_decode_RR(now_ptr, rr);
+        now_ptr = _dns_decode_RR(raw_pack,now_ptr, rr);
         if (packet->records != NULL) // use link table store rrs
             packet->records->next = rr;
         else
@@ -95,10 +116,10 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header)
     return now_prt; // End at header end
 }
 
-char *_dns_decode_RR(char *rr_ptr, DnsRR *rr)
+char *_dns_decode_RR(char* raw_pack,char *rr_ptr, DnsRR *rr)
 {
     char *now_ptr = rr_ptr;
-    rr->name = decode_RR_name(&now_ptr);
+    rr->name = decode_RR_name(raw_pack,&now_ptr);
     now_ptr = _read_uint16(now_ptr, &(rr->type));
     now_ptr = _read_uint16(now_ptr, &(rr->cls));
     now_ptr = _read_uint32(now_ptr, &(rr->ttl));
