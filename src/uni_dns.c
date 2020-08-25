@@ -9,12 +9,12 @@
  * @Copyright 2020 @Makiras
  */
 
-#include <string.h>
 #include "uni_dns.h"
+#include <string.h>
 
 char *_read_uint16(char *ptr, uint16_t *value)
 {
-    value = ntohs(*(uint16_t *)ptr);
+    *value = ntohs(*(uint16_t *)ptr);
     return ptr + 2;
 }
 
@@ -26,7 +26,7 @@ char *_write_uint16(char *ptr, uint16_t value)
 
 char *_read_uint32(char *ptr, uint32_t *value)
 {
-    value = ntohl(*(uint32_t *)ptr);
+    *value = ntohl(*(uint32_t *)ptr);
     return ptr + 4;
 }
 
@@ -36,51 +36,58 @@ char *_write_uint32(char *ptr, uint32_t value)
     return ptr + 4;
 }
 
-char *decode_RR_name(char *raw_pack,char **rrn_ptr)
+char *decode_RR_name(char *raw_pack, char **rrn_ptr)
 {
     char *rname = (char *)malloc(sizeof(uint8_t) * DNS_NSD_LEN_CNAME);
     char *now_ptr = *rrn_ptr;
 
     // determine if there is pointer compression
-    int is_compression=0;
-    if((*now_ptr)&0xc0){
-        now_ptr=raw_pack+(((uint16_t)((*now_ptr)&0x3f)<<8)+(*(now_ptr+1))); // big-endian
-        is_compression=1;
+    int is_compression = 0;
+    if ((*now_ptr) & 0xc0)
+    {
+        now_ptr = raw_pack + (((uint16_t)((*now_ptr) & 0x3f) << 8) + (*(now_ptr + 1))); // big-endian
+        is_compression = 1;
     }
 
-    char* current_name_ptr=rname;
-    while(*now_ptr!=0){
-        int length=*now_ptr++;
-        memcpy(current_name_ptr,now_ptr,length);
-        current_name_ptr+=length;
-        *current_name_ptr++='.';
-        now_ptr+=length;
+    char *current_name_ptr = rname;
+    while (*now_ptr != 0)
+    {
+        int length = *now_ptr++;
+        memcpy(current_name_ptr, now_ptr, length);
+        current_name_ptr += length;
+        *current_name_ptr++ = '.';
+        now_ptr += length;
     }
-    *current_name_ptr='\0';
+    *current_name_ptr = '\0';
 
     // modify rrn_ptr
-    if(is_compression)*rrn_ptr=(*rrn_ptr)+2;
-    else *rrn_ptr=now_ptr;
+    if (is_compression)
+        *rrn_ptr = (*rrn_ptr) + 2;
+    else
+        *rrn_ptr = now_ptr;
 
     return rname;
 }
 
 char *encode_RR_name(char *raw_ptr, char *name_ptr)
 {
-    int length=strlen(name_ptr);
-    *raw_ptr='.';
-    memcpy(raw_ptr+1,name_ptr,length);
-    uint8_t fragment_length=0; //such as len('www') or len('com') , etc
-    char* ptr=raw_ptr+length;
-    while(ptr!=raw_ptr-1){
-        if(*ptr=='.'){
-            (*ptr)=(uint8_t)fragment_length;
-            fragment_length=0;
+    int length = strlen(name_ptr);
+    *raw_ptr = '.';
+    memcpy(raw_ptr + 1, name_ptr, length);
+    uint8_t fragment_length = 0; //such as len('www') or len('com') , etc
+    char *ptr = raw_ptr + length;
+    while (ptr != raw_ptr - 1)
+    {
+        if (*ptr == '.')
+        {
+            (*ptr) = (uint8_t)fragment_length;
+            fragment_length = 0;
         }
-        else fragment_length+=1;
+        else
+            fragment_length += 1;
         ptr--;
     }
-    return raw_ptr+length+1;
+    return raw_ptr + length + 1;
 }
 
 // Free raw pack data after decode
@@ -88,15 +95,18 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
 {
     char *now_ptr = raw_pack; // Iter raw packet from begin
     now_ptr = _dns_decode_header(now_ptr, &(packet->header));
-    int rr_count = packet->header.qdcount + packet->header.ancount + packet->header.nscount + packet->header.arcount;
+    packet->records = NULL;
+    int rr_count = packet->header.qdcount + packet->header.ancount + packet->header.nscount + packet->header.arcount,
+        tp_qdc = packet->header.qdcount;
     while (rr_count--) // Iter raw packet and append RRs
     {
         DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR));
-        now_ptr = _dns_decode_RR(raw_pack,now_ptr, rr);
+        now_ptr = _dns_decode_RR(raw_pack, now_ptr, rr, tp_qdc>0);
         if (packet->records != NULL) // use link table store rrs
             packet->records->next = rr;
         else
             packet->records = rr;
+        tp_qdc--;
     }
     free(raw_pack);
     return; // End at packet end
@@ -128,15 +138,29 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header)
     return now_prt; // End at header end
 }
 
-char *_dns_decode_RR(char* raw_pack,char *rr_ptr, DnsRR *rr)
+char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
 {
     char *now_ptr = rr_ptr;
-    rr->name = decode_RR_name(raw_pack,&now_ptr);
+    rr->name = decode_RR_name(raw_pack, &now_ptr);
+    puts("");
+    for(int i=0;i<8;i++)
+        printf("0x%x ",*(now_ptr+i-4));
+    puts("");
     now_ptr = _read_uint16(now_ptr, &(rr->type));
     now_ptr = _read_uint16(now_ptr, &(rr->cls));
+    if (is_qd)
+    {
+        rr->ttl = -1;
+        rr->rdlength = -1;
+        rr->rdata = NULL;
+        rr->next = NULL;
+        return now_ptr;
+    }
+        
     now_ptr = _read_uint32(now_ptr, &(rr->ttl));
     now_ptr = _read_uint16(now_ptr, &(rr->rdlength));
     rr->rdata = (uint8_t *)malloc(sizeof(uint8_t) * rr->rdlength);
+    rr->next = NULL;
     strncpy(rr->rdata, now_ptr, rr->rdlength);
     return now_ptr + (rr->rdlength);
 }
@@ -151,8 +175,9 @@ void _dns_encode_packet(char *raw_pack, DnsPacket *packet)
     while (rr_count--)
     {
         rr_temp_ptr = rr_ptr->next;
-        now_ptr = _dns_encode_RR(now_ptr, rr_ptr); // Free RR
+        now_ptr = _dns_encode_RR(now_ptr, rr_ptr, packet->header.qdcount > 0); // Free RR
         rr_ptr = rr_temp_ptr;
+        packet->header.qdcount--;
     }
     free(packet);
     return;
@@ -178,12 +203,14 @@ char *_dns_encode_header(char *raw_pack_ptr, DnsHeader *header)
     return raw_ptr;
 }
 
-char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr)
+char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr, int is_qd)
 {
     char *raw_ptr = raw_pack_ptr;
     raw_ptr = encode_RR_name(raw_ptr, rr->name);
     raw_ptr = _write_uint16(raw_ptr, rr->type);
     raw_ptr = _write_uint16(raw_ptr, rr->cls);
+    if (is_qd)
+        return raw_ptr;
     raw_ptr = _write_uint32(raw_ptr, rr->ttl);
     raw_ptr = _write_uint16(raw_ptr, rr->rdlength);
     strncpy(raw_ptr, rr->rdata, rr->rdlength);
@@ -191,4 +218,38 @@ char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr)
     free(rr->name);
     free(rr);
     return raw_ptr;
+}
+
+void print_dns_header(const DnsHeader *header)
+{
+    printf("ID: %d\n", header->id);
+    printf("QR: %d # OpCode: %d # AA: %d # TC: %d # RD: %d\n", header->qr, header->opcode, header->aa, header->rd);
+    printf("RA: %d # Rcode: %d\n", header->ra, header->rcode);
+    printf("COUNT qd: %d # an: %d # ns: %d # ar:%d \n", header->qdcount, header->ancount, header->nscount, header->arcount);
+    return;
+}
+
+void print_dns_RR(const DnsRR *records)
+{
+    puts("------ RR ------");
+    printf("Name: %s\n", records->name);
+    printf("Type: %d\n", records->type);
+    printf("Class: %d\n", records->cls);
+    printf("TTL: %d\n", records->ttl);
+    printf("rdlenght: %d\n", records->rdlength);
+    return;
+}
+
+void print_dns_packet(const DnsPacket *packet)
+{
+    puts("##### DNS PACK #####");
+    print_dns_header(&packet->header);
+    DnsRR *now_rr = packet->records;
+    while (now_rr != NULL)
+    {
+        print_dns_RR(now_rr);
+        now_rr = now_rr->next;
+    }
+    puts("##### PACK END #####");
+    return;
 }

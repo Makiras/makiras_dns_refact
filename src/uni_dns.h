@@ -87,7 +87,10 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header);
 char *_dns_encode_header(char *raw_ptr, DnsHeader *header);
 
 // Decode/Endcode RAW&RR
-char *_dns_decode_RR(char* raw_pack,char *rr_ptr, DnsRR *rr);
-char *_dns_encode_RR(char *rr_ptr, DnsRR *rr);
+char *_dns_decode_RR(char* raw_pack,char *rr_ptr, DnsRR *rr, int is_qd);
+char *_dns_encode_RR(char *rr_ptr, DnsRR *rr, int is_qd);
 
+// Debug for detail
+
+void print_dns_packet(const DnsPacket* packet);
 #endif
