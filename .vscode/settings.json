@@ -21,5 +21,8 @@
         "toolchain",
         "udefine",
         "udefine h"
-    ]
+    ],
+    "files.associations": {
+        "*.ipp": "c"
+    }
 }

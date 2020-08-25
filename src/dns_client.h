@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <uv.h>
 
+#include "udefine.h"
 
+int dns_client_init();
 
 #endif
