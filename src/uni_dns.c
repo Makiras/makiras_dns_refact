@@ -44,7 +44,7 @@ char *decode_RR_name(char *raw_pack,char **rrn_ptr)
     // determine if there is pointer compression
     int is_compression=0;
     if((*now_ptr)&0xc0){
-        now_ptr=raw_pack+(((uint16_t)((*now_ptr)&0x3f)<<8)+(*(now_ptr+1))); // big-endian
+        now_ptr=raw_pack+(((uint16_t)((uint16_t)((*now_ptr)&0x3f))<<8)+(*(now_ptr+1))); // big-endian
         is_compression=1;
     }
 
@@ -60,7 +60,7 @@ char *decode_RR_name(char *raw_pack,char **rrn_ptr)
 
     // modify rrn_ptr
     if(is_compression)*rrn_ptr=(*rrn_ptr)+2;
-    else *rrn_ptr=now_ptr;
+    else *rrn_ptr=++now_ptr;
 
     return rname;
 }
