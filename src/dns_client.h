@@ -18,8 +18,8 @@
 #include "uni_dns.h"
 #include "udefine.h"
 
-extern uv_udp_t send_socket;
-extern uv_loop_t *loop;
+static uv_udp_t send_socket;
+extern uv_loop_t *client_loop;
 
 int dns_client_init();
 

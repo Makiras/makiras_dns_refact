@@ -1,6 +1,10 @@
 #include "dns_server.h"
 #include "uni_dns.h"
 
+char send_buffer[DNS_MAX_PACK_SIZE];
+
+DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t nread);
+
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
 {
     static char slab[DNS_MAX_PACK_SIZE];
@@ -9,20 +13,21 @@ static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
     return;
 }
 
-static void close_cb(uv_handle_t* handle)
+static void close_cb(uv_handle_t *handle)
 {
-    uv_is_closing(handle);
+    // uv_is_closing(handle);
 }
 
 static void sv_send_cb(uv_udp_send_t *req, int status)
 {
-    uv_close((uv_handle_t *)req->handle, close_cb);
-    free(req);
+    puts("Send Successful");
+    // uv_close((uv_handle_t *)req->handle, close_cb);
+    // free(req);
 }
 
 static void dns_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *rcvbuf, const struct sockaddr *addr, unsigned flags)
 {
-    uv_udp_send_t *req;
+    uv_udp_send_t *req = malloc(sizeof(uv_udp_send_t));
     uv_buf_t sndbuf;
     char ipaddr[17] = {0};
     uv_ip4_name(&addr, ipaddr, sizeof(ipaddr));
@@ -31,21 +36,32 @@ static void dns_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *rcvbuf,
         printf("[ERROR] Detected %s trans error or null trans, len :%d !\n", ipaddr, nread);
         return;
     }
-    // uv_udp_recv_stop(handle);
+
     printf("[INFO] receive message from: %s, length: %d\n", ipaddr, nread);
-    handle_dns_req(rcvbuf->base, ipaddr, nread);
+    DnsPacket *results = handle_dns_req(rcvbuf->base, ipaddr, nread);
+    char *bias = _dns_encode_packet(send_buffer, results);
+    sndbuf = uv_buf_init(send_buffer, bias - send_buffer);
+    print_dns_raw(send_buffer, bias - send_buffer);
     fflush(stdout);
-    // uv_udp_send(req, handle, &sndbuf, 1, addr, sv_send_cb);
+
+    uv_udp_send(req, handle, &sndbuf, 1, addr, sv_send_cb);
     return;
 }
 
-void handle_qd_rr(const DnsRR *rr_ptr)
+void packet2response(DnsPacket *origin, int is_support)
+{
+    origin->header.qr = DNS_QR_ANSWER;
+    origin->header.rcode = is_support ? DNS_RCODE_NOERR : DNS_RCODE_NOTIMP;
+    return;
+}
+
+DnsRR *handle_qd_rr(const DnsRR *rr_ptr)
 {
     switch (rr_ptr->type)
     {
     case DNS_RRT_A:
         printf("[Info] Handel A req for %s\n", rr_ptr->name);
-        query_A_res(rr_ptr->name);
+        return query_A_res(rr_ptr->name);
         break;
     case DNS_RRT_NS:
         /* code */
@@ -68,27 +84,46 @@ void handle_qd_rr(const DnsRR *rr_ptr)
     default:
         break;
     }
-    return;
+    return NULL;
 }
 
-int handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t nread)
+DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t nread)
 {
+    puts("\nHandle DNS Req\n");
+
+    // Debug for receive message
     char *raw_pack = (char *)malloc(nread * sizeof(char));
-    char *temp[5000];
     DnsPacket *req_packet = (DnsPacket *)malloc(sizeof(DnsPacket));
     memcpy(raw_pack, rcvbuf, nread);
-    _dns_decode_packet(raw_pack, req_packet);
+    _dns_decode_packet(raw_pack, req_packet); // free raw_pack
     print_dns_packet(req_packet);
 
-    DnsRR *now_rr_ptr = req_packet->records;
+    // Handle recv msg
+    DnsRR *now_rr_ptr = req_packet->records, *result_rr = req_packet->records;
+    while (result_rr->next != NULL)
+        result_rr = result_rr->next;
     for (int i = 0; i < req_packet->header.qdcount; i++)
     {
-        handle_qd_rr(now_rr_ptr);
+        result_rr->next = handle_qd_rr(now_rr_ptr);
+        while (result_rr->next != NULL)
+        {
+            result_rr = result_rr->next;
+            if (result_rr->type != DNS_RRT_OPT)
+                req_packet->header.ancount++;
+            else
+                req_packet->header.arcount++;
+        }
+
         now_rr_ptr = now_rr_ptr->next;
     }
+    packet2response(req_packet, now_rr_ptr != NULL);
 
-    _dns_encode_packet(temp, req_packet);
-    return 0;
+    // Debug handle Result
+    puts("---------- SENDBACK ------------");
+    print_dns_packet(req_packet);
+    puts("---------- BACK END ------------");
+
+    return req_packet;
 }
 
 int dns_server_init()

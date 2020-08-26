@@ -4,9 +4,10 @@
 #include <stdlib.h>
 #include <uv.h>
 
+#include "dns_server.h"
+
 extern uv_loop_t *loop;
-extern uv_udp_t send_socket;
-extern uv_udp_t recv_socket;
+static uv_udp_t recv_socket;
 extern char* bind_address;
 
 int dns_server_init();

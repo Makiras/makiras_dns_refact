@@ -100,12 +100,13 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
         tp_qdc = packet->header.qdcount;
     while (rr_count--) // Iter raw packet and append RRs
     {
-        DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR));
+        DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR)), *now_rr;
         now_ptr = _dns_decode_RR(raw_pack, now_ptr, rr, tp_qdc > 0);
         if (packet->records != NULL) // use link table store rrs
-            packet->records->next = rr;
+            now_rr->next = rr;
         else
             packet->records = rr;
+        now_rr = rr;
         tp_qdc--;
     }
     free(raw_pack);
@@ -158,7 +159,7 @@ char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
     rr->rdata = (uint8_t *)malloc(sizeof(uint8_t) * rr->rdlength);
     rr->next = NULL;
     strncpy(rr->rdata, now_ptr, rr->rdlength);
-    return now_ptr + (rr->rdlength);
+    return now_ptr + rr->rdlength;
 }
 
 // Free packet data after encode
@@ -170,8 +171,9 @@ char *_dns_encode_packet(char *raw_pack, DnsPacket *packet)
     int rr_count = packet->header.qdcount + packet->header.ancount + packet->header.nscount + packet->header.arcount;
     while (rr_count--)
     {
+        printf("rrcount :%d , rr_ptr 0x%08x\n", rr_count, rr_ptr);
         rr_temp_ptr = rr_ptr->next;
-        now_ptr = _dns_encode_RR(now_ptr, rr_ptr, packet->header.qdcount > 0); // Free RR
+        now_ptr = _dns_encode_RR(now_ptr, rr_ptr, (int16_t)packet->header.qdcount > 0); // Free RR
         rr_ptr = rr_temp_ptr;
         packet->header.qdcount--;
     }
@@ -213,7 +215,7 @@ char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr, int is_qd)
     free(rr->rdata);
     free(rr->name);
     free(rr);
-    return raw_ptr;
+    return raw_ptr + rr->rdlength;
 }
 
 void print_dns_header(const DnsHeader *header)
@@ -250,11 +252,11 @@ void print_dns_packet(const DnsPacket *packet)
     return;
 }
 
-void print_dns_raw(const char *raw_ptr,const int len)
+void print_dns_raw(const char *raw_ptr, const int len)
 {
     puts("------ RAW CHAR ------");
-    for(int i=0;i<len;i++)
-        printf("%02x ", raw_ptr[i]);
+    for (int i = 0; i < len; i++)
+        printf("%02hhx ", raw_ptr[i]);
     puts("\n------ END  RAW ------");
     return;
 }
