@@ -48,14 +48,14 @@ static void dns_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *rcvbuf,
     return;
 }
 
-void packet2response(DnsPacket *origin, int is_support)
+void packet2response(DnsPacket *origin)
 {
     origin->header.qr = DNS_QR_ANSWER;
-    origin->header.rcode = is_support ? DNS_RCODE_NOERR : DNS_RCODE_NOTIMP;
+    // origin->header.rcode = is_support ? DNS_RCODE_NOERR : DNS_RCODE_NOTIMP;
     return;
 }
 
-DnsRR *handle_qd_rr(const DnsRR *rr_ptr)
+DnsQRes *handle_qd_rr(const DnsRR *rr_ptr)
 {
     switch (rr_ptr->type)
     {
@@ -67,7 +67,8 @@ DnsRR *handle_qd_rr(const DnsRR *rr_ptr)
         /* code */
         break;
     case DNS_RRT_CNAME:
-        /* code */
+        printf("[Info] Handel CNAME req for %s\n", rr_ptr->name);
+        return query_CNAME_res(rr_ptr->name);
         break;
     case DNS_RRT_SOA:
         /* code */
@@ -76,7 +77,8 @@ DnsRR *handle_qd_rr(const DnsRR *rr_ptr)
         printf("[Info][todo] Handel PTR req for %s\n", rr_ptr->name);
         break;
     case DNS_RRT_AAAA:
-        /* code */
+        printf("[Info] Handel AAAA req for %s\n", rr_ptr->name);
+        return query_AAAA_res(rr_ptr->name);
         break;
     case DNS_RRT_ALL:
         /* code */
@@ -100,23 +102,34 @@ DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t 
 
     // Handle recv msg
     DnsRR *now_rr_ptr = req_packet->records, *result_rr = req_packet->records;
+    DnsQRes *qr_result;
     while (result_rr->next != NULL)
         result_rr = result_rr->next;
     for (int i = 0; i < req_packet->header.qdcount; i++)
     {
-        result_rr->next = handle_qd_rr(now_rr_ptr);
-        while (result_rr->next != NULL)
+        // Handle add RR
+        qr_result = handle_qd_rr(now_rr_ptr);
+        if (qr_result != NULL)
         {
-            result_rr = result_rr->next;
-            if (result_rr->type != DNS_RRT_OPT)
-                req_packet->header.ancount++;
-            else
-                req_packet->header.arcount++;
+            result_rr->next = qr_result->rr;
+            while (result_rr->next != NULL)
+            {
+                result_rr = result_rr->next;
+                if (result_rr->type != DNS_RRT_OPT)
+                    req_packet->header.ancount++;
+                else
+                    req_packet->header.arcount++;
+            }
+            // Handle Rcode
+            if (qr_result->rcode != DNS_RCODE_NOERR)
+            {
+                req_packet->header.rcode = qr_result->rcode;
+                break;
+            }
         }
-
         now_rr_ptr = now_rr_ptr->next;
     }
-    packet2response(req_packet, now_rr_ptr != NULL);
+    packet2response(req_packet); //, now_rr_ptr != NULL);
 
     // Debug handle Result
     puts("---------- SENDBACK ------------");

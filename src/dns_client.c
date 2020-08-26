@@ -105,7 +105,7 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     return qd_RR;
 }
 
-DnsRR *query_res(const int type, const char *domain_name)
+DnsQRes *query_res(const int type, const char *domain_name)
 {
     // Init packet data
     DnsPacket *qd_packet = query_packet_init();
@@ -113,6 +113,12 @@ DnsRR *query_res(const int type, const char *domain_name)
     {
     case DNS_RRT_A:
         qd_packet->records = query_RR_init(domain_name, DNS_RRT_A, DNS_RCLS_IN);
+        break;
+    case DNS_RRT_AAAA:
+        qd_packet->records = query_RR_init(domain_name, DNS_RRT_AAAA, DNS_RCLS_IN);
+        break;
+    case DNS_RRT_CNAME:
+        qd_packet->records = query_RR_init(domain_name, DNS_RRT_CNAME, DNS_RCLS_IN);
         break;
     default:
         return NULL;
@@ -134,13 +140,12 @@ DnsRR *query_res(const int type, const char *domain_name)
     uv_ip4_addr("223.5.5.5", 53, &send_addr);
     int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
     uv_run(client_loop, UV_RUN_DEFAULT);
-    while (!flag)
+    while (!flag) // wait for query finish
         ;
     printf("uv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
 
     // Handle Results
     char *raw_pack = (char *)malloc(flag * sizeof(char));
-    char temp[5000];
     DnsPacket *req_packet = (DnsPacket *)malloc(sizeof(DnsPacket));
     memcpy(raw_pack, packet_res_buffer, flag);
     _dns_decode_packet(raw_pack, req_packet); // has free raw_pack
@@ -148,17 +153,21 @@ DnsRR *query_res(const int type, const char *domain_name)
 
     // Get RR_Res & free mem
     DnsRR *now_rr = req_packet->records, *tempRR;
+    DnsQRes *reslut = malloc(sizeof(DnsQRes));
     for (int i = 0; i < req_packet->header.qdcount; i++)
     {
         tempRR = now_rr->next;
         free(now_rr);
         now_rr = tempRR;
     }
+    reslut->rr = now_rr;
+    reslut->rcode = req_packet->header.rcode;
     free(req_packet);
-    return now_rr;
+
+    return reslut;
 }
 
-DnsRR *query_A_res(const char *domain_name)
+DnsQRes *query_A_res(const char *domain_name)
 {
     if (check_cache(DNS_RRT_A, domain_name) != NULL)
     {
@@ -166,4 +175,24 @@ DnsRR *query_A_res(const char *domain_name)
     }
     else
         return query_res(DNS_RRT_A, domain_name);
+}
+
+DnsQRes *query_AAAA_res(const char *domain_name)
+{
+    if (check_cache(DNS_RRT_AAAA, domain_name) != NULL)
+    {
+        //todo: do cache
+    }
+    else
+        return query_res(DNS_RRT_AAAA, domain_name);
+}
+
+DnsQRes *query_CNAME_res(const char *domain_name)
+{
+    if (check_cache(DNS_RRT_CNAME, domain_name) != NULL)
+    {
+        //todo: do cache
+    }
+    else
+        return query_res(DNS_RRT_CNAME, domain_name);
 }

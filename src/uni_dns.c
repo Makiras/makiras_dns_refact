@@ -158,7 +158,7 @@ char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
     now_ptr = _read_uint16(now_ptr, &(rr->rdlength));
     rr->rdata = (uint8_t *)malloc(sizeof(uint8_t) * rr->rdlength);
     rr->next = NULL;
-    strncpy(rr->rdata, now_ptr, rr->rdlength);
+    memcpy(rr->rdata, now_ptr, rr->rdlength);
     return now_ptr + rr->rdlength;
 }
 
@@ -211,7 +211,7 @@ char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr, int is_qd)
         return raw_ptr;
     raw_ptr = _write_uint32(raw_ptr, rr->ttl);
     raw_ptr = _write_uint16(raw_ptr, rr->rdlength);
-    strncpy(raw_ptr, rr->rdata, rr->rdlength);
+    memcpy(raw_ptr, rr->rdata, rr->rdlength);
     free(rr->rdata);
     free(rr->name);
     free(rr);

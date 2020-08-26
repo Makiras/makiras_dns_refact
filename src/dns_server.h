@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <uv.h>
 
-#include "dns_server.h"
+#include "dns_client.h"
 
 extern uv_loop_t *loop;
 static uv_udp_t recv_socket;

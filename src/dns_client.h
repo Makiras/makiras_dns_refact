@@ -21,8 +21,15 @@
 static uv_udp_t send_socket;
 extern uv_loop_t *client_loop;
 
+typedef struct DnsQRes{
+    DnsRR* rr;
+    int rcode;
+} DnsQRes;
+
 int dns_client_init();
 
-DnsRR* query_A_res(const char* domain_name);
+DnsQRes* query_A_res(const char* domain_name);
+DnsQRes* query_AAAA_res(const char* domain_name);
+DnsQRes* query_CNAME_res(const char* domain_name);
 
 #endif
