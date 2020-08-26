@@ -15,8 +15,14 @@
 #include <stdlib.h>
 #include <uv.h>
 
+#include "uni_dns.h"
 #include "udefine.h"
 
+extern uv_udp_t send_socket;
+extern uv_loop_t *loop;
+
 int dns_client_init();
+
+DnsRR* query_A_res(const char* domain_name);
 
 #endif

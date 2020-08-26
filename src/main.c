@@ -17,6 +17,7 @@ int main()
     puts("[INFO] Start Running");
     fflush(stdout);
     loop = uv_default_loop();
+    dns_client_init();
     dns_server_init();
     uv_run(loop, UV_RUN_DEFAULT);
     puts("[INFO] Stop Running");

@@ -31,8 +31,8 @@
 #ifndef _UNI_DNS_H
 #define _UNI_DNS_H
 
-#include <stdio.h>
 #include "udefine.h"
+#include <stdio.h>
 
 // DNS Header Object
 typedef struct dns_header
@@ -80,17 +80,18 @@ typedef struct dns_packet
 
 // Decode/Encode RAW&packet
 void _dns_decode_packet(char *raw_pack, DnsPacket *packet);
-void _dns_encode_packet(char *raw_pack, DnsPacket *packet);
+char *_dns_encode_packet(char *raw_pack, DnsPacket *packet);
 
 // Decode/Endcode RAW&Header
 char *_dns_decode_header(char *header_ptr, DnsHeader *header);
 char *_dns_encode_header(char *raw_ptr, DnsHeader *header);
 
 // Decode/Endcode RAW&RR
-char *_dns_decode_RR(char* raw_pack,char *rr_ptr, DnsRR *rr, int is_qd);
+char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd);
 char *_dns_encode_RR(char *rr_ptr, DnsRR *rr, int is_qd);
 
 // Debug for detail
 
-void print_dns_packet(const DnsPacket* packet);
+void print_dns_packet(const DnsPacket *packet);
+void print_dns_raw(const char *raw_ptr,const int len);
 #endif
