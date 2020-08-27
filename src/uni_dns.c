@@ -98,9 +98,11 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
     packet->records = NULL;
     int rr_count = packet->header.qdcount + packet->header.ancount + packet->header.nscount + packet->header.arcount,
         tp_qdc = packet->header.qdcount;
+    DnsRR *now_rr;
     while (rr_count--) // Iter raw packet and append RRs
     {
-        DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR)), *now_rr;
+        printf("rr_count: %d\n", rr_count);
+        DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR));
         now_ptr = _dns_decode_RR(raw_pack, now_ptr, rr, tp_qdc > 0);
         if (packet->records != NULL) // use link table store rrs
             now_rr->next = rr;
@@ -108,8 +110,11 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
             packet->records = rr;
         now_rr = rr;
         tp_qdc--;
+        print_dns_packet(packet);
     }
+    puts("_dns_decode_packet free");
     free(raw_pack);
+    puts("_dns_decode_packet END");
     return; // End at packet end
 }
 
@@ -143,6 +148,7 @@ char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
 {
     char *now_ptr = rr_ptr;
     rr->name = decode_RR_name(raw_pack, &now_ptr);
+    printf("Decode RR name: %s\n", rr->name);
     now_ptr = _read_uint16(now_ptr, &(rr->type));
     now_ptr = _read_uint16(now_ptr, &(rr->cls));
     if (is_qd)
