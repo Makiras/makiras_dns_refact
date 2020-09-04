@@ -1,0 +1,28 @@
+{
+    "cSpell.words": [
+        "Makiras",
+        "ancount",
+        "cdouble",
+        "cint",
+        "cshort",
+        "dns",
+        "dns rcls in",
+        "dns rcode dsotypeni",
+        "dsotypeni",
+        "h",
+        "in",
+        "libuv",
+        "mingw",
+        "mirrorlist",
+        "msys",
+        "pacman",
+        "rcls",
+        "rcode",
+        "toolchain",
+        "udefine",
+        "udefine h"
+    ],
+    "files.associations": {
+        "*.ipp": "c"
+    }
+}
