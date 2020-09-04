@@ -11,16 +11,16 @@ all: $(target)
 
 $(target): checkdirs $(objects)
 	
-	gcc -Wall -O2 \
+	gcc -Wall -O2 -g\
 		$(objects) -o $@ \
-		-ladvapi32 -liphlpapi -lpsapi -luser32 -luserenv -lws2_32 -luv
+		 -luv
 
 checkdirs: 
 	mkdir -p $(BINDIR)
 	mkdir -p $(OBJDIR)
 
 $(objects): $(OBJDIR)/%.o : $(SRCDIR)/%.c
-	cc -c  $< -o $@
+	cc -c -g $< -o  $@
 
 
 .PHONY : clean
