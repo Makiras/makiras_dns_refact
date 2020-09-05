@@ -23,6 +23,16 @@
         "udefine h"
     ],
     "files.associations": {
-        "*.ipp": "c"
+        "*.ipp": "c",
+        "array": "cpp",
+        "string_view": "cpp",
+        "functional": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "compare": "cpp",
+        "istream": "cpp",
+        "ostream": "cpp",
+        "ranges": "cpp"
     }
 }

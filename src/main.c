@@ -10,10 +10,12 @@
 uv_loop_t *loop, *client_loop;
 extern uv_udp_t send_socket;
 extern uv_udp_t recv_socket;
+
 char *bind_address = "0.0.0.0";
 
 void init_client_loop()
 {
+    dns_cache_init();
     uv_loop_init(client_loop);
     return;
 }

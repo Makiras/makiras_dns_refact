@@ -10,17 +10,71 @@
  */
 
 #include "dns_client.h"
+#include "rbtree.h"
 struct sockaddr_in addr, send_addr;
 static uv_buf_t client_buf;
 static uv_udp_send_t client_req;
+
+rbtree *cacheTree;
 char *buffer_rec;
 int sent_pack_id = 0, flag = 0;
 char packet_raw_buffer[DNS_MAX_PACK_SIZE], packet_res_buffer[DNS_MAX_PACK_SIZE];
 
+void dns_cache_init()
+{
+    cacheTree = rbtree_init(rb_compare);
+    return;
+}
+
 //todo: cache
 DnsRR *check_cache(int qtype, const char *domain_name)
 {
-    return NULL;
+    printf("[Cache] Query cache for %s type %d\n", domain_name, qtype);
+    DnsRR *cache_res = rbtree_lookup(cacheTree, (void *)&(KEY){domain_name, qtype});
+    if (cache_res == NULL)
+        return NULL;
+    puts("Cache HIT!");
+    DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
+    while (cache_res->next != NULL)
+    {
+        dnsRRdcpy(cache_res, temp);
+        cache_res = cache_res->next;
+        temp->next = malloc(sizeof(DnsRR));
+        temp = temp->next;
+    }
+    dnsRRdcpy(cache_res, temp);
+    return ret;
+}
+
+void add_cache(int qtype, const char *domain_name, const DnsRR *dnsRR)
+{
+    printf("[Cache] Add cache for %s type %d\n", domain_name, qtype);
+    DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
+    while (dnsRR->next != NULL)
+    {
+        dnsRRdcpy(dnsRR, temp);
+        dnsRR = dnsRR->next;
+        temp->next = malloc(sizeof(DnsRR));
+        temp = temp->next;
+    }
+    dnsRRdcpy(dnsRR, temp);
+    rbtree_insert(cacheTree, (void *)&(KEY){domain_name, qtype}, ret);
+    return;
+}
+
+void delete_cache(int qtype, const char *domain_name)
+{
+    printf("[Cache] Delete cache for %s type %d\n", domain_name, qtype);
+    DnsRR *cache_res = rbtree_lookup(cacheTree, (void *)&(KEY){domain_name, qtype}), *temp;
+    while (cache_res != NULL)
+    {
+        free(cache_res->rdata);
+        free(cache_res->name);
+        temp = cache_res;
+        cache_res = cache_res->next;
+        free(temp);
+    }
+    return;
 }
 
 static void alloc_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
@@ -153,25 +207,31 @@ DnsQRes *query_res(const int type, const char *domain_name)
 
     // Get RR_Res & free mem
     DnsRR *now_rr = req_packet->records, *tempRR;
-    DnsQRes *reslut = malloc(sizeof(DnsQRes));
+    DnsQRes *result = malloc(sizeof(DnsQRes));
     for (int i = 0; i < req_packet->header.qdcount; i++)
     {
         tempRR = now_rr->next;
         free(now_rr);
         now_rr = tempRR;
     }
-    reslut->rr = now_rr;
-    reslut->rcode = req_packet->header.rcode;
+    result->rr = now_rr;
+    result->rcode = req_packet->header.rcode;
+    if(result -> rcode == DNS_RCODE_NOERR)
+        add_cache(type, domain_name, result->rr);
     free(req_packet);
 
-    return reslut;
+    return result;
 }
 
 DnsQRes *query_A_res(const char *domain_name)
 {
-    if (check_cache(DNS_RRT_A, domain_name) != NULL)
+    DnsRR *cacheRR = check_cache(DNS_RRT_A, domain_name);
+    if (cacheRR != NULL)
     {
-        //todo: do cache
+        DnsQRes *result = malloc(sizeof(DnsQRes));
+        result->rr = cacheRR;
+        result->rcode = DNS_RCODE_NOERR;
+        return result;
     }
     else
         return query_res(DNS_RRT_A, domain_name);
@@ -179,9 +239,13 @@ DnsQRes *query_A_res(const char *domain_name)
 
 DnsQRes *query_AAAA_res(const char *domain_name)
 {
-    if (check_cache(DNS_RRT_AAAA, domain_name) != NULL)
+    DnsRR *cacheRR = check_cache(DNS_RRT_AAAA, domain_name);
+    if (cacheRR != NULL)
     {
-        //todo: do cache
+        DnsQRes *result = malloc(sizeof(DnsQRes));
+        result->rr = cacheRR;
+        result->rcode = DNS_RCODE_NOERR;
+        return result;
     }
     else
         return query_res(DNS_RRT_AAAA, domain_name);
@@ -189,9 +253,13 @@ DnsQRes *query_AAAA_res(const char *domain_name)
 
 DnsQRes *query_CNAME_res(const char *domain_name)
 {
-    if (check_cache(DNS_RRT_CNAME, domain_name) != NULL)
+    DnsRR *cacheRR = check_cache(DNS_RRT_CNAME, domain_name);
+    if (cacheRR != NULL)
     {
-        //todo: do cache
+        DnsQRes *result = malloc(sizeof(DnsQRes));
+        result->rr = cacheRR;
+        result->rcode = DNS_RCODE_NOERR;
+        return result;
     }
     else
         return query_res(DNS_RRT_CNAME, domain_name);

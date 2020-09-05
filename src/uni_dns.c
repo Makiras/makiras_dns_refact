@@ -81,7 +81,7 @@ char *encode_RR_name(char *raw_ptr, char *name_ptr)
 {
     int length = strlen(name_ptr);
     *raw_ptr = '.';
-    memcpy(raw_ptr + 1, name_ptr, length);
+    memcpy(raw_ptr + 1, name_ptr, length+1);
     uint8_t fragment_length = 0; //such as len('www') or len('com') , etc
     char *ptr = raw_ptr + length;
     while (ptr != raw_ptr - 1)
@@ -234,6 +234,16 @@ char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr, int is_qd)
     return raw_ptr + rr->rdlength;
 }
 
+void dnsRRdcpy(const DnsRR* src, DnsRR* dst)
+{
+    *dst = *src;
+    dst->name = malloc(strlen(src->name)+1);
+    dst->rdata = malloc(src->rdlength);
+    memcpy(dst->name,src->name,strlen(src->name)+1);
+    memcpy(dst->rdata,src->rdata,src->rdlength);
+    return;
+}
+
 void print_dns_header(const DnsHeader *header)
 {
     printf("ID: %d\n", header->id);
@@ -256,6 +266,7 @@ void print_dns_RR(const DnsRR *records)
 
 void print_dns_packet(const DnsPacket *packet)
 {
+    return;
     puts("##### DNS PACK #####");
     print_dns_header(&(packet->header));
     DnsRR *now_rr = packet->records;
@@ -270,6 +281,7 @@ void print_dns_packet(const DnsPacket *packet)
 
 void print_dns_raw(const char *raw_ptr, const int len)
 {
+    return;
     puts("------ RAW CHAR ------");
     for (int i = 0; i < len; i++)
         printf("%02hhx ", raw_ptr[i]);

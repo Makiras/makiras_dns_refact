@@ -27,7 +27,7 @@ typedef struct DnsQRes{
 } DnsQRes;
 
 int dns_client_init();
-
+void dns_cache_init();
 DnsQRes* query_A_res(const char* domain_name);
 DnsQRes* query_AAAA_res(const char* domain_name);
 DnsQRes* query_CNAME_res(const char* domain_name);
