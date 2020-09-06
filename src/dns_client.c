@@ -13,12 +13,14 @@
 #include "rbtree.h"
 #include <stdio.h>
 #include <time.h>
+#include <curl/curl.h>
 struct sockaddr_in addr, send_addr;
 static uv_buf_t client_buf;
 static uv_udp_send_t client_req;
 
 rbtree *cacheTree;
 char *buffer_rec;
+const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 int sent_pack_id = 0, flag = 0;
 char packet_raw_buffer[DNS_MAX_PACK_SIZE], packet_res_buffer[DNS_MAX_PACK_SIZE];
 
@@ -79,6 +81,103 @@ void dns_cache_init()
 
     fclose(fp);
     return;
+}
+
+size_t b64_encoded_size(size_t inlen)
+{
+    size_t ret;
+    ret = inlen;
+    if (inlen % 3 != 0)
+        ret += 3 - (inlen % 3);
+    ret /= 3;
+    ret *= 4;
+    return ret;
+}
+
+char *b64_encode(const unsigned char *inBi, size_t len)
+{
+    char *out;
+    size_t elen, i, j, v;
+
+    if (inBi == NULL || len == 0)
+        return NULL;
+
+    elen = b64_encoded_size(len);
+    out = malloc(elen + 1);
+    out[elen] = '\0';
+
+    for (i = 0, j = 0; i < len; i += 3, j += 4)
+    {
+        v = inBi[i];
+        v = i + 1 < len ? v << 8 | inBi[i + 1] : v << 8;
+        v = i + 2 < len ? v << 8 | inBi[i + 2] : v << 8;
+
+        out[j] = b64chars[(v >> 18) & 0x3F];
+        out[j + 1] = b64chars[(v >> 12) & 0x3F];
+        if (i + 1 < len)
+            out[j + 2] = b64chars[(v >> 6) & 0x3F];
+        else
+            out[j + 2] = '=';
+        if (i + 2 < len)
+            out[j + 3] = b64chars[v & 0x3F];
+        else
+            out[j + 3] = '=';
+    }
+    for (int outi = 0; outi < elen; outi++)
+    {
+        if (out[outi] == '+')
+            out[outi] = '-';
+        else if (out[outi] == '/')
+            out[outi] = '_';
+        else if (out[outi] == '=')
+            out[outi] = '\0';
+    }
+    printf("[Info] DNS over HTTPS base64url = %s\n", out);
+    return out;
+}
+
+size_t curl_wcb(char *ptr, size_t size, size_t nmemb, int *length)
+{
+    size_t realsize = size * nmemb;
+    memcpy(packet_res_buffer + (*length), ptr, realsize);
+    *length += realsize;
+    return realsize;
+}
+
+void curl_query_doh(const unsigned char *inBi, size_t len)
+{
+    CURL *curl;
+    CURLcode res;
+
+    curl = curl_easy_init();
+    char *raw_base64url = b64_encode(inBi, len);
+    int length = 0;
+    if (curl)
+    {
+        char query_str[DNS_MAX_PACK_SIZE] = "https://dns.alidns.com/dns-query?dns=";
+        strncpy(query_str + 37, raw_base64url, strlen(raw_base64url));
+        query_str[37 + strlen(raw_base64url)] = '\0';
+        free(raw_base64url);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1);
+        curl_easy_setopt(curl, CURLOPT_URL, query_str);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_wcb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &length);
+
+        res = curl_easy_perform(curl);
+        packet_res_buffer[length] = '\0';
+        printf("Handle_Len %d\n" ,length);
+        print_dns_raw(packet_res_buffer, length);
+
+        /* Check for errors */
+        if (res != CURLE_OK)
+            fprintf(stderr, "curl_easy_perform() failed: %s\n",
+                    curl_easy_strerror(res));
+
+        /* always cleanup */
+        curl_easy_cleanup(curl);
+    }
 }
 
 //todo: cache
@@ -229,13 +328,18 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     eRR->cls = 512;
     eRR->ttl = 0;
     eRR->rdlength = 12;
+    eRR->next = NULL;
     char *temptr = eRR->rdata = malloc(12);
+    // EDNS https://www.cnblogs.com/cobbliu/p/3188632.html
     *(uint16_t *)temptr = htons(8); // (Defined in [RFC6891]) OPTION-CODE, 2 octets, for ECS is 8 (0x00 0x08).
-    temptr+=2;
+    temptr += 2;
     *(uint16_t *)temptr = htons(8); //OPTION-LENGTH： 2个字节，描述它之后的内容长度(BYTE)
-    temptr+=2;
+    temptr += 2;
     *(uint16_t *)temptr = htons(1); //FAMILY： 2个字节，1表示ipv4, 2表示ipv6
-    temptr+=2;
+    temptr += 2;
+    *(uint16_t *)temptr = htons((24 << 8));
+    temptr += 2;
+    *(uint32_t *)temptr = htonl((((((123 << 8) + 112) << 8) + 15) << 8) + 154);
     return qd_RR;
 }
 
@@ -268,6 +372,8 @@ DnsQRes *query_res(const int type, const char *domain_name)
     // Prepare sending data
     int data_len = bias - packet_raw_buffer, time_cnt = 0;
     client_buf = uv_buf_init(packet_raw_buffer, data_len);
+    curl_query_doh(packet_raw_buffer, data_len);
+    flag = data_len;
 
     // Sending & Waiting (multi-thread)
     dns_client_init();

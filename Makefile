@@ -8,9 +8,9 @@ objects := $(patsubst $(SRCDIR)/%.c, $(OBJDIR)/%.o, $(srcs))
 $(info $(srcs) $(objects))
 
 ifeq ($(OS),Windows_NT)
-	LLIB := -ladvapi32 -liphlpapi -lpsapi -luser32 -luserenv -lws2_32 -luv
+	LLIB := -ladvapi32 -liphlpapi -lpsapi -luser32 -luserenv -lws2_32 -luv -lcurl
 else
-	LLIB := -luv
+	LLIB := -luv -lcurl
 endif
 
 all: $(target)

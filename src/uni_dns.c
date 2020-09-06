@@ -156,7 +156,7 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header)
 char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
 {
     char *now_ptr = rr_ptr;
-    printf("rr_name _dns_decode_RR: 0x%08x, 0x%4x", raw_pack, *(short*)raw_pack);
+    printf("rr_name _dns_decode_RR: 0x%08x, 0x%4x\n", raw_pack, *(short*)raw_pack);
     rr->name = decode_RR_name(raw_pack, &now_ptr);
     printf("Decode RR name: %s\n", rr->name);
     now_ptr = _read_uint16(now_ptr, &(rr->type));
@@ -266,7 +266,7 @@ void print_dns_RR(const DnsRR *records)
 
 void print_dns_packet(const DnsPacket *packet)
 {
-    // return;
+    return;
     puts("##### DNS PACK #####");
     print_dns_header(&(packet->header));
     DnsRR *now_rr = packet->records;

@@ -36,6 +36,7 @@
         "ranges": "cpp",
         "*.tcc": "c",
         "optional": "c",
-        "system_error": "c"
+        "system_error": "c",
+        "curl.h": "c"
     }
 }
