@@ -11,6 +11,7 @@
 
 #include "dns_client.h"
 #include "rbtree.h"
+#include <stdio.h>
 struct sockaddr_in addr, send_addr;
 static uv_buf_t client_buf;
 static uv_udp_send_t client_req;
@@ -23,6 +24,59 @@ char packet_raw_buffer[DNS_MAX_PACK_SIZE], packet_res_buffer[DNS_MAX_PACK_SIZE];
 void dns_cache_init()
 {
     cacheTree = rbtree_init(rb_compare);
+    FILE *fp = fopen("relay.txt", "r");
+    if (fp == NULL)
+        return;
+
+    char cbuff[DNS_NSD_LEN_CNAME], cipbuff[DNS_NSD_LEN_CNAME / 2];
+    while (fscanf(fp, "%s", cbuff) != EOF)
+    {
+        fscanf(fp, "%s", cipbuff);
+        if (cbuff[strlen(cbuff) - 1] != '.')
+        {
+            cbuff[strlen(cbuff) + 1] = '\0';
+            cbuff[strlen(cbuff)] = '.';
+        }
+        printf("[Init] read host for %s,%s\n", cbuff, cipbuff);
+        if (strrchr(cipbuff, ':') == NULL) // ipv4
+        {
+
+            DnsRR *cache_res = rbtree_lookup(cacheTree, &(KEY){cbuff, DNS_RRT_A}),
+                  *tba = malloc(sizeof(DnsRR));
+
+            // Construct DnsRR package
+            tba->name = malloc(strlen(cbuff) + 1);
+            memcpy(tba->name, cbuff, strlen(cbuff) + 1);
+            tba->type = DNS_RRT_A;
+            tba->cls = DNS_RCLS_IN;
+            tba->ttl = -1;
+            tba->rdlength = 4;
+            tba->rdata = malloc(4);
+            tba->next = NULL;
+            memset(tba->rdata, 0, 4);
+            for (int ipi = 0, rdi = 0; ipi < strlen(cipbuff); ipi++)
+            {
+                if (cipbuff[ipi] == '.' && ++rdi)
+                    continue;
+                tba->rdata[rdi] = tba->rdata[rdi] * 10 + cipbuff[ipi] - '0';
+            }
+
+            // add into resolve
+            if (cache_res != NULL)
+            {
+                while (cache_res->next != NULL)
+                    cache_res = cache_res->next;
+                cache_res->next = tba;
+            }
+            else // new reslove
+                rbtree_insert(cacheTree, &(KEY){cbuff, DNS_RRT_A}, tba);
+        }
+        else // ipv6
+        {
+        }
+    }
+
+    fclose(fp);
     return;
 }
 
@@ -186,7 +240,7 @@ DnsQRes *query_res(const int type, const char *domain_name)
     print_dns_raw(packet_raw_buffer, bias - packet_raw_buffer);
 
     // Prepare sending data
-    int data_len = bias - packet_raw_buffer;
+    int data_len = bias - packet_raw_buffer, time_cnt = 0;
     client_buf = uv_buf_init(packet_raw_buffer, data_len);
 
     // Sending & Waiting (multi-thread)
@@ -194,8 +248,14 @@ DnsQRes *query_res(const int type, const char *domain_name)
     uv_ip4_addr("223.5.5.5", 53, &send_addr);
     int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
     uv_run(client_loop, UV_RUN_DEFAULT);
-    while (!flag) // wait for query finish
-        ;
+    while (!flag && time_cnt++ < 400) // wait for query finish, timeout
+        sleep(5);
+    if (time_cnt > 400) // 400 *5 = 2000ms
+    {
+        puts("[WARN] Timeout");
+        return NULL;
+    }
+
     printf("uv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
 
     // Handle Results
@@ -216,7 +276,7 @@ DnsQRes *query_res(const int type, const char *domain_name)
     }
     result->rr = now_rr;
     result->rcode = req_packet->header.rcode;
-    if(result -> rcode == DNS_RCODE_NOERR)
+    if (result->rcode == DNS_RCODE_NOERR)
         add_cache(type, domain_name, result->rr);
     free(req_packet);
 

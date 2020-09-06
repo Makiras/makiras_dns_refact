@@ -266,7 +266,7 @@ void print_dns_RR(const DnsRR *records)
 
 void print_dns_packet(const DnsPacket *packet)
 {
-    return;
+    // return;
     puts("##### DNS PACK #####");
     print_dns_header(&(packet->header));
     DnsRR *now_rr = packet->records;
@@ -281,7 +281,7 @@ void print_dns_packet(const DnsPacket *packet)
 
 void print_dns_raw(const char *raw_ptr, const int len)
 {
-    return;
+    // return;
     puts("------ RAW CHAR ------");
     for (int i = 0; i < len; i++)
         printf("%02hhx ", raw_ptr[i]);
