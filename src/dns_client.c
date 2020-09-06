@@ -50,12 +50,12 @@ void dns_cache_init()
             memcpy(tba->name, cbuff, strlen(cbuff) + 1);
             tba->type = DNS_RRT_A;
             tba->cls = DNS_RCLS_IN;
-            tba->ttl = -1;
+            tba->ttl = -1; // unsigned to max
             tba->rdlength = 4;
             tba->rdata = malloc(4);
             tba->next = NULL;
             memset(tba->rdata, 0, 4);
-            for (int ipi = 0, rdi = 0; ipi < strlen(cipbuff); ipi++)
+            for (int ipi = 0, rdi = 0; ipi < strlen(cipbuff); ipi++) // cover str to ipv4 addr
             {
                 if (cipbuff[ipi] == '.' && ++rdi)
                     continue;
@@ -81,7 +81,6 @@ void dns_cache_init()
     return;
 }
 
-//todo: cache
 DnsRR *check_cache(int qtype, const char *domain_name)
 {
     printf("[Cache] Query cache for %s type %d\n", domain_name, qtype);
@@ -189,8 +188,8 @@ int dns_client_init()
     uv_ip4_addr("0.0.0.0", 0, &addr);
     uv_udp_init(client_loop, &send_socket);
     uv_udp_bind(&send_socket, (const struct sockaddr *)&addr, UV_UDP_REUSEADDR);
-    uv_udp_set_broadcast(&send_socket, 1);
-    flag = 0;
+    uv_udp_set_broadcast(&send_socket, 1); // libuv通过0.0.0.0发数据的权限限制，如果不加会异常
+    flag = 0;                              // 是否处理完
     return 0;
 }
 
@@ -267,7 +266,7 @@ DnsQRes *query_res(const int type, const char *domain_name)
         return NULL;
     }
 
-    printf("uv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    printf("uv_udp_send %s\n", !r ? "NOERR" : uv_strerror(r));
 
     // Handle Results
     char *raw_pack = (char *)malloc(flag * sizeof(char));

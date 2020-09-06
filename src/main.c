@@ -24,11 +24,11 @@ int main()
 {
     puts("[INFO] Start Running");
     fflush(stdout);
-    uv_thread_t client_id;
-    loop = uv_default_loop();
-    client_loop = malloc(sizeof(uv_loop_t));
-    uv_thread_create(&client_id, init_client_loop, NULL);
-    dns_server_init();
+    uv_thread_t client_id;                                // 客户端线程ID
+    loop = uv_default_loop();                             // 服务端loop
+    client_loop = malloc(sizeof(uv_loop_t));              // 客户端loop
+    uv_thread_create(&client_id, init_client_loop, NULL); // 创建客户端线程
+    dns_server_init();  
     uv_run(loop, UV_RUN_DEFAULT);
     puts("[INFO] Stop Running");
     return 0;
