@@ -12,6 +12,7 @@
 #include "dns_client.h"
 #include "rbtree.h"
 #include <stdio.h>
+#include <time.h>
 struct sockaddr_in addr, send_addr;
 static uv_buf_t client_buf;
 static uv_udp_send_t client_req;
@@ -87,6 +88,14 @@ DnsRR *check_cache(int qtype, const char *domain_name)
     DnsRR *cache_res = rbtree_lookup(cacheTree, (void *)&(KEY){domain_name, qtype});
     if (cache_res == NULL)
         return NULL;
+
+    if (time(NULL) - cache_res->addT > cache_res->ttl && cache_res->ttl != (uint32_t)(-1))
+    {
+        puts("Cache TIMEOUT!");
+        delete_cache(qtype, domain_name);
+        return NULL;
+    }
+
     puts("Cache HIT!");
     DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
     while (cache_res->next != NULL)
@@ -107,6 +116,7 @@ void add_cache(int qtype, const char *domain_name, const DnsRR *dnsRR)
     while (dnsRR->next != NULL)
     {
         dnsRRdcpy(dnsRR, temp);
+        temp->addT = time(NULL);
         dnsRR = dnsRR->next;
         temp->next = malloc(sizeof(DnsRR));
         temp = temp->next;
@@ -128,6 +138,7 @@ void delete_cache(int qtype, const char *domain_name)
         cache_res = cache_res->next;
         free(temp);
     }
+    rbtree_remove(cacheTree, (void *)&(KEY){domain_name, qtype});
     return;
 }
 
