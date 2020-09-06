@@ -207,7 +207,7 @@ DnsPacket *query_packet_init()
     req_pack->header.qdcount = 1;
     req_pack->header.ancount = 0;
     req_pack->header.nscount = 0;
-    req_pack->header.arcount = 0;
+    req_pack->header.arcount = 1; // DNS OPT
     return req_pack;
 }
 
@@ -220,7 +220,22 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     puts(qd_RR->name);
     qd_RR->type = qtype;
     qd_RR->cls = qclass;
-    qd_RR->next = NULL;
+
+    // DNS OPT
+    DnsRR *eRR = (qd_RR->next) = (DnsRR *)malloc(sizeof(DnsRR));
+    eRR->name = malloc(1);
+    eRR->name[0] = '\0';
+    eRR->type = DNS_RRT_OPT;
+    eRR->cls = 512;
+    eRR->ttl = 0;
+    eRR->rdlength = 12;
+    char *temptr = eRR->rdata = malloc(12);
+    *(uint16_t *)temptr = htons(8); // (Defined in [RFC6891]) OPTION-CODE, 2 octets, for ECS is 8 (0x00 0x08).
+    temptr+=2;
+    *(uint16_t *)temptr = htons(8); //OPTION-LENGTH： 2个字节，描述它之后的内容长度(BYTE)
+    temptr+=2;
+    *(uint16_t *)temptr = htons(1); //FAMILY： 2个字节，1表示ipv4, 2表示ipv6
+    temptr+=2;
     return qd_RR;
 }
 

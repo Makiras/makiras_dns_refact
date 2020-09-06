@@ -33,6 +33,9 @@
         "compare": "cpp",
         "istream": "cpp",
         "ostream": "cpp",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "*.tcc": "c",
+        "optional": "c",
+        "system_error": "c"
     }
 }
