@@ -11,9 +11,9 @@
 
 #include "dns_client.h"
 #include "rbtree.h"
+#include <curl/curl.h>
 #include <stdio.h>
 #include <time.h>
-#include <curl/curl.h>
 struct sockaddr_in addr, send_addr;
 static uv_buf_t client_buf;
 static uv_udp_send_t client_req;
@@ -144,7 +144,7 @@ size_t curl_wcb(char *ptr, size_t size, size_t nmemb, int *length)
     return realsize;
 }
 
-void curl_query_doh(const unsigned char *inBi, size_t len)
+int curl_query_doh(const unsigned char *inBi, size_t len)
 {
     CURL *curl;
     CURLcode res;
@@ -167,7 +167,7 @@ void curl_query_doh(const unsigned char *inBi, size_t len)
 
         res = curl_easy_perform(curl);
         packet_res_buffer[length] = '\0';
-        printf("Handle_Len %d\n" ,length);
+        printf("Handle_Len %d\n", length);
         print_dns_raw(packet_res_buffer, length);
 
         /* Check for errors */
@@ -178,6 +178,7 @@ void curl_query_doh(const unsigned char *inBi, size_t len)
         /* always cleanup */
         curl_easy_cleanup(curl);
     }
+    return length;
 }
 
 //todo: cache
@@ -306,7 +307,7 @@ DnsPacket *query_packet_init()
     req_pack->header.qdcount = 1;
     req_pack->header.ancount = 0;
     req_pack->header.nscount = 0;
-    req_pack->header.arcount = 1; // DNS OPT
+    req_pack->header.arcount = 0; // DNS OPT
     return req_pack;
 }
 
@@ -372,23 +373,21 @@ DnsQRes *query_res(const int type, const char *domain_name)
     // Prepare sending data
     int data_len = bias - packet_raw_buffer, time_cnt = 0;
     client_buf = uv_buf_init(packet_raw_buffer, data_len);
-    curl_query_doh(packet_raw_buffer, data_len);
-    flag = data_len;
+    flag = curl_query_doh(packet_raw_buffer, data_len);
 
     // Sending & Waiting (multi-thread)
-    dns_client_init();
-    uv_ip4_addr("223.5.5.5", 53, &send_addr);
-    int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
-    uv_run(client_loop, UV_RUN_DEFAULT);
-    while (!flag && time_cnt++ < 400) // wait for query finish, timeout
-        sleep(5);
-    if (time_cnt > 400) // 400 *5 = 2000ms
-    {
-        puts("[WARN] Timeout");
-        return NULL;
-    }
-
-    printf("uv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    // dns_client_init();
+    // uv_ip4_addr("223.5.5.5", 53, &send_addr);
+    // int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
+    // uv_run(client_loop, UV_RUN_DEFAULT);
+    // while (!flag && time_cnt++ < 400) // wait for query finish, timeout
+    //     sleep(5);
+    // if (time_cnt > 400) // 400 *5 = 2000ms
+    // {
+    //     puts("[WARN] Timeout");
+    //     return NULL;
+    // }
+    // printf("uv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
 
     // Handle Results
     char *raw_pack = (char *)malloc(flag * sizeof(char));

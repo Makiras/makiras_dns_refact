@@ -52,13 +52,15 @@ char *decode_RR_name(char *raw_pack, char **rrn_ptr)
     {
         //printf("rr_name now_ptr: 0x%08x, 0x%4x\n", now_ptr, *(short*)now_ptr);
         //fflush(stdout);
-        if (*(now_ptr) & 0xc0) {
+        if (*(now_ptr)&0xc0)
+        {
             now_ptr = raw_pack + (((uint16_t)((uint16_t)((*now_ptr) & 0x3f)) << 8) + (*(now_ptr + 1))); // big-endian
             is_compression = 1;
         }
 
         int fragment_length = *now_ptr++;
-        if (!is_compression) {
+        if (!is_compression)
+        {
             length += fragment_length + 1;
         }
         memcpy(current_name_ptr, now_ptr, fragment_length);
@@ -72,7 +74,7 @@ char *decode_RR_name(char *raw_pack, char **rrn_ptr)
     if (is_compression)
         *rrn_ptr = (*rrn_ptr) + 2 + length;
     else
-        *rrn_ptr = now_ptr+1;
+        *rrn_ptr = now_ptr + 1;
     //puts(rname);
     return rname;
 }
@@ -81,7 +83,7 @@ char *encode_RR_name(char *raw_ptr, char *name_ptr)
 {
     int length = strlen(name_ptr);
     *raw_ptr = '.';
-    memcpy(raw_ptr + 1, name_ptr, length+1);
+    memcpy(raw_ptr + 1, name_ptr, length + 1);
     uint8_t fragment_length = 0; //such as len('www') or len('com') , etc
     char *ptr = raw_ptr + length;
     while (ptr != raw_ptr - 1)
@@ -111,7 +113,7 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
     {
         printf("rr_count: %d\n", rr_count);
         DnsRR *rr = (DnsRR *)malloc(sizeof(DnsRR));
-        printf("rr_name _dns_decode_packet: 0x%08x, 0x%4x", raw_pack, *(short*)raw_pack);
+        printf("raw_pack: 0x%08x, now_ptr: 0x%08x\n", raw_pack, now_ptr);
         now_ptr = _dns_decode_RR(raw_pack, now_ptr, rr, tp_qdc > 0);
         if (packet->records != NULL) // use link table store rrs
             now_rr->next = rr;
@@ -156,24 +158,26 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header)
 char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
 {
     char *now_ptr = rr_ptr;
-    printf("rr_name _dns_decode_RR: 0x%08x, 0x%4x\n", raw_pack, *(short*)raw_pack);
+    printf("raw_pack: 0x%08x, now_ptr: 0x%08x\n", raw_pack, now_ptr);
+    // print_dns_raw(now_ptr-8, 16);
     rr->name = decode_RR_name(raw_pack, &now_ptr);
+    rr->next = NULL;
     printf("Decode RR name: %s\n", rr->name);
     now_ptr = _read_uint16(now_ptr, &(rr->type));
     now_ptr = _read_uint16(now_ptr, &(rr->cls));
     if (is_qd)
     {
+        puts("IS_QD");
         rr->ttl = -1;
         rr->rdlength = -1;
         rr->rdata = NULL;
-        rr->next = NULL;
         return now_ptr;
     }
-
     now_ptr = _read_uint32(now_ptr, &(rr->ttl));
     now_ptr = _read_uint16(now_ptr, &(rr->rdlength));
+    if (rr->rdlength == 0)
+        return now_ptr;
     rr->rdata = (uint8_t *)malloc(sizeof(uint8_t) * rr->rdlength);
-    rr->next = NULL;
     memcpy(rr->rdata, now_ptr, rr->rdlength);
     return now_ptr + rr->rdlength;
 }
@@ -221,26 +225,31 @@ char *_dns_encode_RR(char *raw_pack_ptr, DnsRR *rr, int is_qd)
 {
     char *raw_ptr = raw_pack_ptr;
     raw_ptr = encode_RR_name(raw_ptr, rr->name);
+    free(rr->name);
     raw_ptr = _write_uint16(raw_ptr, rr->type);
     raw_ptr = _write_uint16(raw_ptr, rr->cls);
     if (is_qd)
         return raw_ptr;
     raw_ptr = _write_uint32(raw_ptr, rr->ttl);
     raw_ptr = _write_uint16(raw_ptr, rr->rdlength);
+    if(rr->rdlength == 0)
+    {
+        free(rr);
+        return raw_ptr;
+    }
     memcpy(raw_ptr, rr->rdata, rr->rdlength);
     free(rr->rdata);
-    free(rr->name);
-    free(rr);
+    
     return raw_ptr + rr->rdlength;
 }
 
-void dnsRRdcpy(const DnsRR* src, DnsRR* dst)
+void dnsRRdcpy(const DnsRR *src, DnsRR *dst)
 {
     *dst = *src;
-    dst->name = malloc(strlen(src->name)+1);
+    dst->name = malloc(strlen(src->name) + 1);
     dst->rdata = malloc(src->rdlength);
-    memcpy(dst->name,src->name,strlen(src->name)+1);
-    memcpy(dst->rdata,src->rdata,src->rdlength);
+    memcpy(dst->name, src->name, strlen(src->name) + 1);
+    memcpy(dst->rdata, src->rdata, src->rdlength);
     return;
 }
 
@@ -261,6 +270,7 @@ void print_dns_RR(const DnsRR *records)
     printf("Class: %d\n", records->cls);
     printf("TTL: %d\n", records->ttl);
     printf("rdlenght: %d\n", records->rdlength);
+    puts("----------------");
     return;
 }
 
