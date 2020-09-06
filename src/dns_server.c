@@ -132,7 +132,7 @@ DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t 
             req_packet->header.rcode = DNS_RCODE_SERVFAIL;
             break;
         }
-        
+
         now_rr_ptr = now_rr_ptr->next;
     }
     packet2response(req_packet); //, now_rr_ptr != NULL);

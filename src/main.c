@@ -28,7 +28,7 @@ int main()
     loop = uv_default_loop();                             // 服务端loop
     client_loop = malloc(sizeof(uv_loop_t));              // 客户端loop
     uv_thread_create(&client_id, init_client_loop, NULL); // 创建客户端线程
-    dns_server_init();  
+    dns_server_init();
     uv_run(loop, UV_RUN_DEFAULT);
     puts("[INFO] Stop Running");
     return 0;
