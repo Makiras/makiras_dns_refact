@@ -14,6 +14,7 @@
 #include <curl/curl.h>
 #include <stdio.h>
 #include <time.h>
+
 struct sockaddr_in addr, send_addr;
 static uv_udp_t send_socket;
 static uv_buf_t client_buf;
@@ -22,7 +23,7 @@ static uv_udp_send_t client_req;
 rbtree *cacheTree;
 char *buffer_rec;
 const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-int sent_pack_id = 0, flag = 0;
+int sent_pack_id = 0, flag = 0, keep_lock = 0;
 char packet_raw_buffer[DNS_MAX_PACK_SIZE], packet_res_buffer[DNS_MAX_PACK_SIZE];
 
 void dns_cache_init()
@@ -30,10 +31,10 @@ void dns_cache_init()
     PLOG(LINFO, "[Cache]\tStart Dns Cache Init\n");
 
     cacheTree = rbtree_init(rb_compare);
+    // Handle Host File
     FILE *fp = fopen("relay.txt", "r");
     if (fp == NULL)
         return;
-
     char cbuff[DNS_NSD_LEN_CNAME], cipbuff[DNS_NSD_LEN_CNAME / 2];
     while (fscanf(fp, "%s", cbuff) != EOF)
     {
@@ -105,6 +106,93 @@ void dns_cache_init()
         }
     }
 
+    fclose(fp);
+    fp = fopen("keep.txt", "r");
+    if (fp == NULL)
+        return;
+    PLOG(LINFO, "[Cache]\tRecover Dns Cache\n");
+    keep_lock = 1;
+    int ttl, addtime;
+    while (fscanf(fp, "%s", cbuff) != EOF)
+    {
+        fscanf(fp, "%s", cipbuff);
+        fscanf(fp, "%d %d", &ttl, &addtime);
+        if (cbuff[strlen(cbuff) - 1] != '.')
+        {
+            cbuff[strlen(cbuff) + 1] = '\0';
+            cbuff[strlen(cbuff)] = '.';
+        }
+        PLOG(LDEBUG, "[Cache]\tRead host for %s,%s , add at %d, ttl %d\n", cbuff, cipbuff, addtime, ttl);
+        if (time(NULL) - addtime > ttl) // expired
+            continue;
+        if (strrchr(cipbuff, ':') == NULL) // ipv4
+        {
+
+            DnsRR *cache_res = rbtree_lookup(cacheTree, &(KEY){cbuff, DNS_RRT_A}),
+                  *tba = malloc(sizeof(DnsRR));
+
+            // Construct DnsRR package
+            tba->name = malloc(strlen(cbuff) + 1);
+            memcpy(tba->name, cbuff, strlen(cbuff) + 1);
+            tba->addT = addtime;
+            tba->type = DNS_RRT_A;
+            tba->cls = DNS_RCLS_IN;
+            tba->ttl = ttl; // unsigned to max
+            tba->rdlength = 4;
+            tba->rdata = malloc(4);
+            tba->next = NULL;
+            memset(tba->rdata, 0, 4);
+            for (int ipi = 0, rdi = 0; ipi < strlen(cipbuff); ipi++) // cover str to ipv4 addr
+            {
+                if (cipbuff[ipi] == '.' && ++rdi)
+                    continue;
+                tba->rdata[rdi] = tba->rdata[rdi] * 10 + cipbuff[ipi] - '0';
+            }
+
+            // add into resolve
+            if (cache_res != NULL)
+            {
+                while (cache_res->next != NULL)
+                    cache_res = cache_res->next;
+                cache_res->next = tba;
+            }
+            else // new reslove
+                rbtree_insert(cacheTree, &(KEY){cbuff, DNS_RRT_A}, tba);
+        }
+        else // ipv6
+        {
+            DnsRR *cache_res = rbtree_lookup(cacheTree, &(KEY){cbuff, DNS_RRT_AAAA}),
+                  *tba = malloc(sizeof(DnsRR));
+
+            // Construct DnsRR package
+            tba->name = malloc(strlen(cbuff) + 1);
+            memcpy(tba->name, cbuff, strlen(cbuff) + 1);
+            tba->addT = addtime;
+            tba->type = DNS_RRT_AAAA;
+            tba->cls = DNS_RCLS_IN;
+            tba->ttl = ttl; // unsigned to max
+            tba->rdlength = 16;
+            tba->rdata = malloc(16);
+            tba->next = NULL;
+            memset(tba->rdata, 0, 16);
+            uv_inet_pton(AF_INET6, cipbuff, tba->rdata); // ipv6 readable str to uint_8 str
+            // add into resolve
+            if (cache_res != NULL)
+            {
+                while (cache_res->next != NULL)
+                    cache_res = cache_res->next;
+                cache_res->next = tba;
+            }
+            else // new reslove
+                rbtree_insert(cacheTree, &(KEY){cbuff, DNS_RRT_AAAA}, tba);
+        }
+    }
+    keep_lock = 0;
+    fclose(fp);
+
+    fp = fopen("keep.txt", "w+"); // clear file
+    if (fp == NULL)
+        return;
     fclose(fp);
     return;
 }
@@ -186,7 +274,7 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
         query_str[strlen(DOT_SERVER) + strlen(raw_base64url)] = '\0';
         PLOG(LDEBUG, "[Client]\tCurl Handle URL %s\n", query_str);
         free(raw_base64url);
-        struct curl_slist* host_list_ = curl_slist_append(NULL, "cloudflare-dns.com:443:104.16.248.249");
+        struct curl_slist *host_list_ = curl_slist_append(NULL, "cloudflare-dns.com:443:104.16.248.249");
         curl_easy_setopt(curl, CURLOPT_RESOLVE, host_list_);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1);
@@ -241,10 +329,41 @@ DnsRR *check_cache(int qtype, const char *domain_name)
     return ret;
 }
 
+void writeRR2file(const DnsRR *rr)
+{
+    FILE *fp = fopen("keep.txt", "a");
+    char addr_readable[128];
+    while (rr != NULL)
+    {
+        if (rr->type != DNS_RRT_A && rr->type != DNS_RRT_AAAA)
+        {
+            rr = rr->next;
+            continue;
+        }
+        if (rr->type == DNS_RRT_A) //v4
+        {
+            uv_inet_ntop(AF_INET, rr->rdata, addr_readable, 128);
+            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->addT, rr->ttl);
+        }
+        else //v6
+        {
+            uv_inet_ntop(AF_INET6, rr->rdata, addr_readable, 128);
+            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->addT, rr->ttl);
+        }
+        fflush(fp);
+        rr = rr->next;
+    }
+    if (fp == NULL)
+        return;
+    fclose(fp);
+    return;
+}
+
 void add_cache(int qtype, const char *domain_name, const DnsRR *dnsRR)
 {
     PLOG(LINFO, "[Cache]\tAdd cache for %s type %d\n", domain_name, qtype);
     DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
+    writeRR2file(dnsRR);
     while (dnsRR->next != NULL)
     {
         dnsRRdcpy(dnsRR, temp);

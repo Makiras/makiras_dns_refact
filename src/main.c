@@ -28,6 +28,6 @@ int main()
     uv_thread_create(&client_id, init_client_loop, NULL); // 创建客户端线程
     dns_server_init();
     uv_run(loop, UV_RUN_DEFAULT);
-    PLOG(LINFO, "[Main]\tRunning\n");
+    PLOG(LINFO, "[Main]\tExit DNS\n");
     return 0;
 }
