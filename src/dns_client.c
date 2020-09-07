@@ -186,6 +186,8 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
         query_str[strlen(DOT_SERVER) + strlen(raw_base64url)] = '\0';
         PLOG(LDEBUG, "[Client]\tCurl Handle URL %s\n", query_str);
         free(raw_base64url);
+        struct curl_slist* host_list_ = curl_slist_append(NULL, "cloudflare-dns.com:443:104.16.248.249");
+        curl_easy_setopt(curl, CURLOPT_RESOLVE, host_list_);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1);
         curl_easy_setopt(curl, CURLOPT_URL, query_str);
@@ -320,7 +322,6 @@ int dns_client_init()
     uv_udp_init(client_loop, &send_socket);
     uv_udp_bind(&send_socket, (const struct sockaddr *)&addr, UV_UDP_REUSEADDR);
     uv_udp_set_broadcast(&send_socket, 1); // libuv通过0.0.0.0发数据的权限限制，如果不加会异常
-    flag = 0;                              // 是否处理完
     return 0;
 }
 
@@ -371,7 +372,7 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     temptr += 2;
     *(uint16_t *)temptr = htons(1); //FAMILY： 2个字节，1表示ipv4, 2表示ipv6
     temptr += 2;
-    *(uint16_t *)temptr = htons((24 << 8) | 24); // SOURCE|SCOPE NETMASE
+    *(uint16_t *)temptr = htons((24 << 8)); // SOURCE|SCOPE NETMASE
     temptr += 2;
     *(uint32_t *)temptr = htonl((((((123 << 8) + 112) << 8) + 15) << 8) + 154);
     return qd_RR;
@@ -380,7 +381,7 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
 void dns_client_run()
 {
     dns_client_init();
-    uv_ip4_addr("119.29.29.29", 53, &send_addr);
+    uv_ip4_addr(DNS_SERVER, 53, &send_addr);
     int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
     uv_run(client_loop, UV_RUN_DEFAULT);
     PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
@@ -418,19 +419,19 @@ DnsQRes *query_res(const int type, const char *domain_name)
 
     // Prepare sending data
     int data_len = bias - packet_raw_buffer, time_cnt = 0;
+    client_buf = uv_buf_init(packet_raw_buffer, data_len);
 
     // Sending & Waiting (multi-thread)
     if (ENABLE_DOT)
         flag = curl_query_doh(packet_raw_buffer, data_len);
     if (!ENABLE_DOT || flag == -1)
     {
-        client_buf = uv_buf_init(packet_raw_buffer, data_len);
         uv_thread_t client_id;
+        flag = 0; // in main threads for sync
         uv_thread_create(&client_id, dns_client_run, NULL);
-        while (time_cnt++ < 400 && !flag ) // wait for query finish, timeout 
-            usleep(5 * 1000);   // us -> ms
-            
-        if (time_cnt > 400) // 400 *5 = 2000ms
+        while (time_cnt++ < 400 && !flag) // wait for query finish, timeout
+            usleep(5 * 1000);             // us -> ms
+        if (time_cnt > 400)               // 400 *5 = 2000ms
         {
             PLOG(LWARN, "[Client]\tTimeout\n");
             return NULL;
