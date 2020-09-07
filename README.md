@@ -19,8 +19,9 @@
 MSYS2 terminal 
 ```bash
 pacman -Syu
-pacman -S vim git mingw-w64-x86_64-toolchain \
-    mingw-w64-x86_64-libuv
+pacman -S vim git 
+pacman -S mingw-w64-x86_64-toolchain
+pacman -S mingw-w64-x86_64-libuv mingw-w64-x86_64-curl
 # change /etc/pacman.d/mirrorlist.mingw64 for better speed
 ```
 

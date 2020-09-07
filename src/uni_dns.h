@@ -55,7 +55,7 @@ typedef struct dns_header
 typedef struct dns_rr
 {
   struct dns_rr *next;
-  uint16_t len;  // not used for now
+  uint64_t addT;  // not used for now
   uint8_t *name; // dynamic length name
   uint16_t type; // Resource Record Type (16 bit)
   uint16_t cls;
@@ -89,6 +89,9 @@ char *_dns_encode_header(char *raw_ptr, DnsHeader *header);
 // Decode/Endcode RAW&RR
 char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd);
 char *_dns_encode_RR(char *rr_ptr, DnsRR *rr, int is_qd);
+
+// Tools
+void dnsRRdcpy(const DnsRR* src, DnsRR* dst);
 
 // Debug for detail
 

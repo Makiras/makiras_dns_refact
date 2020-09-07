@@ -7,8 +7,8 @@
 #include "dns_client.h"
 
 extern uv_loop_t *loop;
-static uv_udp_t recv_socket;
-extern char* bind_address;
+extern int BIND_IPV6;
+extern char *BIND_ADDR;
 
 int dns_server_init();
 
