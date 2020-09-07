@@ -26,6 +26,8 @@ char packet_raw_buffer[DNS_MAX_PACK_SIZE], packet_res_buffer[DNS_MAX_PACK_SIZE];
 
 void dns_cache_init()
 {
+    PLOG(LINFO, "[Cache]\tStart Dns Cache Init\n");
+
     cacheTree = rbtree_init(rb_compare);
     FILE *fp = fopen("relay.txt", "r");
     if (fp == NULL)
@@ -40,7 +42,7 @@ void dns_cache_init()
             cbuff[strlen(cbuff) + 1] = '\0';
             cbuff[strlen(cbuff)] = '.';
         }
-        printf("[Init] read host for %s,%s\n", cbuff, cipbuff);
+        PLOG(LDEBUG, "[Cache]\tRead host for %s,%s\n", cbuff, cipbuff);
         if (strrchr(cipbuff, ':') == NULL) // ipv4
         {
 
@@ -132,7 +134,7 @@ char *b64_encode(const unsigned char *inBi, size_t len)
         else if (out[outi] == '=')
             out[outi] = '\0';
     }
-    printf("[Info] DNS over HTTPS base64url = %s\n", out);
+    PLOG(LDEBUG, "[Client]\tDNS over HTTPS base64url = %s\n", out);
     return out;
 }
 
@@ -167,13 +169,12 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
 
         res = curl_easy_perform(curl);
         packet_res_buffer[length] = '\0';
-        printf("Handle_Len %d\n", length);
+        PLOG(LDEBUG, "[Client]\t Curl Handle Length %d\n", length);
         print_dns_raw(packet_res_buffer, length);
 
         /* Check for errors */
         if (res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                    curl_easy_strerror(res));
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
 
         /* always cleanup */
         curl_easy_cleanup(curl);
@@ -184,19 +185,19 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
 //todo: cache
 DnsRR *check_cache(int qtype, const char *domain_name)
 {
-    printf("[Cache] Query cache for %s type %d\n", domain_name, qtype);
+    PLOG(LINFO, "[Cache]\tQuery cache for %s type %d\n", domain_name, qtype);
     DnsRR *cache_res = rbtree_lookup(cacheTree, (void *)&(KEY){domain_name, qtype});
     if (cache_res == NULL)
         return NULL;
 
     if (time(NULL) - cache_res->addT > cache_res->ttl && cache_res->ttl != (uint32_t)(-1))
     {
-        puts("Cache TIMEOUT!");
+        PLOG(LINFO, "[Cache]\tTIMEOUT!");
         delete_cache(qtype, domain_name);
         return NULL;
     }
 
-    puts("Cache HIT!");
+    PLOG(LINFO, "[Cache]\tHIT!");
     DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
     while (cache_res->next != NULL)
     {
@@ -211,7 +212,7 @@ DnsRR *check_cache(int qtype, const char *domain_name)
 
 void add_cache(int qtype, const char *domain_name, const DnsRR *dnsRR)
 {
-    printf("[Cache] Add cache for %s type %d\n", domain_name, qtype);
+    PLOG(LINFO, "[Cache]\tAdd cache for %s type %d\n", domain_name, qtype);
     DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
     while (dnsRR->next != NULL)
     {
@@ -228,7 +229,7 @@ void add_cache(int qtype, const char *domain_name, const DnsRR *dnsRR)
 
 void delete_cache(int qtype, const char *domain_name)
 {
-    printf("[Cache] Delete cache for %s type %d\n", domain_name, qtype);
+    PLOG(LINFO, "[Cache]\tDelete cache for %s type %d\n", domain_name, qtype);
     DnsRR *cache_res = rbtree_lookup(cacheTree, (void *)&(KEY){domain_name, qtype}), *temp;
     while (cache_res != NULL)
     {
@@ -263,13 +264,13 @@ static void cl_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *rcvbuf, 
     uv_ip4_name(&addr, ipaddr, sizeof(ipaddr));
     if (nread <= 0)
     {
-        printf("[ERROR] Detected %s trans error or null trans, len :%d !\n", ipaddr, nread);
+        PLOG(LCRITICAL, "[Client]\tDetected %s trans error or null trans, len :%d !\n", ipaddr, nread);
         return;
     }
     uv_close((uv_handle_t *)handle, close_cb);
-    printf("[INFO] receive relay message from: %s, length: %d\n", ipaddr, nread);
+    PLOG(LINFO, "[Client]\treceive relay message from: %s, length: %d\n", ipaddr, nread);
     print_dns_raw(rcvbuf->base, nread);
-    fflush(stdout);
+
     memcpy(packet_res_buffer, rcvbuf->base, nread);
     flag = nread;
     return;
@@ -277,7 +278,7 @@ static void cl_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *rcvbuf, 
 
 static void cl_send_cb(uv_udp_send_t *req, int status)
 {
-    puts("[INFO] Start Client Send callback");
+    PLOG(LDEBUG, "[Client]\tStart Client Send callback\n");
     uv_udp_recv_start(req->handle, alloc_cb, cl_recv_cb);
     return;
 }
@@ -285,7 +286,7 @@ static void cl_send_cb(uv_udp_send_t *req, int status)
 int dns_client_init()
 {
     // send & listen
-    printf("[Info] Start init client.\n");
+    PLOG(LINFO, "[Client]\tStart init client.\n");
     uv_ip4_addr("0.0.0.0", 0, &addr);
     uv_udp_init(client_loop, &send_socket);
     uv_udp_bind(&send_socket, (const struct sockaddr *)&addr, UV_UDP_REUSEADDR);
@@ -317,7 +318,7 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     qd_RR->name = (char *)malloc(strlen(qname) + 1);
     strncpy(qd_RR->name, qname, strlen(qname));
     qd_RR->name[strlen(qname)] = '\0';
-    puts(qd_RR->name);
+    PLOG(LDEBUG, "[Client]\tQuery RR name :%s", qd_RR->name);
     qd_RR->type = qtype;
     qd_RR->cls = qclass;
 
@@ -367,7 +368,7 @@ DnsQRes *query_res(const int type, const char *domain_name)
     char *bias = _dns_encode_packet(packet_raw_buffer, qd_packet);
 
     // Debug infomation
-    printf("[Info] cache miss for %s, send for more infomation\n", domain_name);
+    PLOG(LDEBUG, "[Client]\tCache miss for %s, send for more infomation\n", domain_name);
     print_dns_raw(packet_raw_buffer, bias - packet_raw_buffer);
 
     // Prepare sending data
@@ -384,10 +385,10 @@ DnsQRes *query_res(const int type, const char *domain_name)
     //     sleep(5);
     // if (time_cnt > 400) // 400 *5 = 2000ms
     // {
-    //     puts("[WARN] Timeout");
+    //     PLOG(LWARN, "[Client]\tTimeout");
     //     return NULL;
     // }
-    // printf("uv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    // PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
 
     // Handle Results
     char *raw_pack = (char *)malloc(flag * sizeof(char));

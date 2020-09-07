@@ -20,7 +20,7 @@ static void close_cb(uv_handle_t *handle)
 
 static void sv_send_cb(uv_udp_send_t *req, int status)
 {
-    puts("Send Successful");
+    PLOG(LDEBUG, "[Server]\tSend Successful\n");
     // uv_close((uv_handle_t *)req->handle, close_cb);
     // free(req);
 }
@@ -33,16 +33,15 @@ static void dns_recv_cb(uv_udp_t *handle, ssize_t nread, const uv_buf_t *rcvbuf,
     uv_ip4_name(&addr, ipaddr, sizeof(ipaddr));
     if (nread <= 0)
     {
-        printf("[ERROR] Detected %s trans error or null trans, len :%d !\n", ipaddr, nread);
+        PLOG(LCRITICAL, "[Server]\tDetected %s trans error or null trans, len :%d !\n", ipaddr, nread);
         return;
     }
 
-    printf("[INFO] receive message from: %s, length: %d\n", ipaddr, nread);
+    PLOG(LDEBUG, "[Server]\tReceive message from: %s, length: %d\n", ipaddr, nread);
     DnsPacket *results = handle_dns_req(rcvbuf->base, ipaddr, nread);
     char *bias = _dns_encode_packet(send_buffer, results);
     sndbuf = uv_buf_init(send_buffer, bias - send_buffer);
     print_dns_raw(send_buffer, bias - send_buffer);
-    fflush(stdout);
 
     uv_udp_send(req, handle, &sndbuf, 1, addr, sv_send_cb);
     return;
@@ -60,24 +59,24 @@ DnsQRes *handle_qd_rr(const DnsRR *rr_ptr)
     switch (rr_ptr->type)
     {
     case DNS_RRT_A:
-        printf("[Info] Handel A req for %s\n", rr_ptr->name);
+        PLOG(LINFO, "[Server]\tHandel A req for %s\n", rr_ptr->name);
         return query_A_res(rr_ptr->name);
         break;
     case DNS_RRT_NS:
         /* code */
         break;
     case DNS_RRT_CNAME:
-        printf("[Info] Handel CNAME req for %s\n", rr_ptr->name);
+        PLOG(LINFO, "[Server]\tHandel CNAME req for %s\n", rr_ptr->name);
         return query_CNAME_res(rr_ptr->name);
         break;
     case DNS_RRT_SOA:
         /* code */
         break;
     case DNS_RRT_PTR:
-        printf("[Info][todo] Handel PTR req for %s\n", rr_ptr->name);
+        PLOG(LINFO, "[Server]\t[todo!]Handel PTR req for %s\n", rr_ptr->name);
         break;
     case DNS_RRT_AAAA:
-        printf("[Info] Handel AAAA req for %s\n", rr_ptr->name);
+        PLOG(LINFO, "[Server]\tHandel AAAA req for %s\n", rr_ptr->name);
         return query_AAAA_res(rr_ptr->name);
         break;
     case DNS_RRT_ALL:
@@ -91,7 +90,7 @@ DnsQRes *handle_qd_rr(const DnsRR *rr_ptr)
 
 DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t nread)
 {
-    puts("\nHandle DNS Req\n");
+    PLOG(LINFO, "[Server]\tStart handle DNS Req\n");
 
     // Debug for receive message
     char *raw_pack = (char *)malloc(nread * sizeof(char));
@@ -138,17 +137,19 @@ DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t 
     packet2response(req_packet); //, now_rr_ptr != NULL);
 
     // Debug handle Result
-    puts("---------- SENDBACK ------------");
+    PLOG(LINFO, "[Server]\t---------- SENDBACK ------------\n");
     print_dns_packet(req_packet);
-    puts("---------- BACK END ------------");
+    PLOG(LDEBUG, "[Server]\t---------- BACK END ------------\n");
 
     return req_packet;
 }
 
 int dns_server_init()
 {
+    PLOG(LINFO, "[Server]\tStart Dns Server\n");
     uv_udp_init(loop, &recv_socket);
     struct sockaddr_in recv_addr;
+    PLOG(LDEBUG, "[Server]\tBind Addr %s\n", bind_address);
     uv_ip4_addr(bind_address, 53, &recv_addr);
     uv_udp_bind(&recv_socket, (const struct sockaddr *)&recv_addr, UV_UDP_REUSEADDR);
     uv_udp_recv_start(&recv_socket, alloc_cb, dns_recv_cb);

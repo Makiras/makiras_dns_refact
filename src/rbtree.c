@@ -1,4 +1,5 @@
 #include "rbtree.h"
+#include "udefine.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -127,7 +128,7 @@ struct rbtree_node *rbtree_createnode(KEY *key, void *data)
     newnode->key->type = key->type;
     newnode->data = data;
     memcpy(newnode->key->name, key->name, strlen(key->name) + 1);
-    printf("CREATE %s %s\n", newnode->key->name, key->name);
+    PLOG(LDEBUG, "[CacheT]\tCREATE %s %s\n", newnode->key->name, key->name);
     return newnode;
 }
 
@@ -137,8 +138,8 @@ struct rbtree_node *do_lookup(KEY *key, struct rbtree *tree, struct rbtree_node 
 
     while (current)
     {
-        // printf("NOW KEY %s %d\n", current->key->name, current->key->type);
-        // printf("WANT KEY %s %d\n", key->name, key->type);
+        // PLOG(LDEBUG, "[CacheT]\tNOW KEY %s %d\n", current->key->name, current->key->type);
+        // PLOG(LDEBUG, "[CacheT]\tWANT KEY %s %d\n", key->name, key->type);
         int ret = tree->compare(current->key, key);
         if (ret == 0)
             return current;
@@ -159,7 +160,7 @@ void *rbtree_lookup(struct rbtree *tree, KEY *key)
 {
     assert(tree != NULL);
     struct rbtree_node *node;
-    printf("lookup %s %d\n", key->name, key->type);
+    PLOG(LDEBUG, "[CacheT]\tlookup %s %d\n", key->name, key->type);
     node = do_lookup(key, tree, NULL);
     return (node == NULL) ? NULL : (node->data);
 }
@@ -337,7 +338,7 @@ int rbtree_insert(struct rbtree *tree, KEY *key, void *data)
 }
 int rb_compare(KEY *key_a, KEY *key_b)
 {
-    printf("Comapre %s %d %s %d\n%d %d\n", key_a->name, strlen(key_a->name), key_b->name, strlen(key_b->name), key_a->type, key_b->type);
+    PLOG(LALL, "[CacheT]\tComapre domain %s type: %d len:%d  \tWITH\tdomain %s type:%d len:%d\n", key_a->name, key_a->type, strlen(key_a->name), key_b->name, key_b->type, strlen(key_b->name));
     if (strcmp(key_a->name, key_b->name) > 0)
         return 1;
     else if (strcmp(key_a->name, key_b->name) < 0)

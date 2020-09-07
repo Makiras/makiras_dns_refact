@@ -11,6 +11,8 @@
 #define _UDEFINE_H
 
 #include <stdint.h>
+#include "log.h"
+#include "config.h"
 
 #define cint const int32_t
 #define cLL  const int64_t
