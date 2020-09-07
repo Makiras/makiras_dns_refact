@@ -24,6 +24,7 @@ extern int ENABLE_DNSOPT;
 extern char *DOT_SERVER;
 extern char *DNS_SERVER;
 extern int ENABLE_DOT;
+extern int ENABLE_EXP;
 
 typedef struct DnsQRes{
     DnsRR* rr;
@@ -32,6 +33,7 @@ typedef struct DnsQRes{
 
 int dns_client_init();
 void dns_cache_init();
+DnsQRes* query_exp_res(const int type, const char *domain_name);
 DnsQRes* query_A_res(const char* domain_name);
 DnsQRes* query_AAAA_res(const char* domain_name);
 DnsQRes* query_CNAME_res(const char* domain_name);

@@ -92,7 +92,7 @@ void dns_cache_init()
             tba->rdata = malloc(16);
             tba->next = NULL;
             memset(tba->rdata, 0, 16);
-            uv_inet_pton(AF_INET6, cipbuff, tba->rdata);    // ipv6 readable str to uint_8 str 
+            uv_inet_pton(AF_INET6, cipbuff, tba->rdata); // ipv6 readable str to uint_8 str
             // add into resolve
             if (cache_res != NULL)
             {
@@ -200,7 +200,11 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
 
         /* Check for errors */
         if (res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        {
+            PLOG(LCRITICAL, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            curl_easy_cleanup(curl);
+            return -1;
+        }
 
         /* always cleanup */
         curl_easy_cleanup(curl);
@@ -208,7 +212,6 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
     return length;
 }
 
-//todo: cache
 DnsRR *check_cache(int qtype, const char *domain_name)
 {
     PLOG(LINFO, "[Cache]\tQuery cache for %s type %d\n", domain_name, qtype);
@@ -344,13 +347,13 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     qd_RR->name = (char *)malloc(strlen(qname) + 1);
     strncpy(qd_RR->name, qname, strlen(qname));
     qd_RR->name[strlen(qname)] = '\0';
-    PLOG(LDEBUG, "[Client]\tQuery RR name :%s", qd_RR->name);
+    PLOG(LDEBUG, "[Client]\tQuery RR name :%s\n", qd_RR->name);
     qd_RR->type = qtype;
     qd_RR->cls = qclass;
     qd_RR->next = NULL;
 
     if (!ENABLE_DNSOPT)
-        return;
+        return qd_RR;
     // DNS OPT
     DnsRR *eRR = (qd_RR->next) = (DnsRR *)malloc(sizeof(DnsRR));
     eRR->name = malloc(1);
@@ -374,6 +377,16 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     return qd_RR;
 }
 
+void dns_client_run()
+{
+    dns_client_init();
+    uv_ip4_addr("119.29.29.29", 53, &send_addr);
+    int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
+    uv_run(client_loop, UV_RUN_DEFAULT);
+    PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    return;
+}
+
 DnsQRes *query_res(const int type, const char *domain_name)
 {
     // Init packet data
@@ -390,7 +403,10 @@ DnsQRes *query_res(const int type, const char *domain_name)
         qd_packet->records = query_RR_init(domain_name, DNS_RRT_CNAME, DNS_RCLS_IN);
         break;
     default:
-        return NULL;
+        if (ENABLE_EXP)
+            qd_packet->records = query_RR_init(domain_name, type, DNS_RCLS_IN);
+        else
+            return NULL;
         break;
     }
     print_dns_packet(qd_packet);
@@ -406,21 +422,19 @@ DnsQRes *query_res(const int type, const char *domain_name)
     // Sending & Waiting (multi-thread)
     if (ENABLE_DOT)
         flag = curl_query_doh(packet_raw_buffer, data_len);
-    else
+    if (!ENABLE_DOT || flag == -1)
     {
         client_buf = uv_buf_init(packet_raw_buffer, data_len);
-        dns_client_init();
-        uv_ip4_addr(DNS_SERVER, 53, &send_addr);
-        int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
-        uv_run(client_loop, UV_RUN_DEFAULT);
-        while (!flag && time_cnt++ < 400) // wait for query finish, timeout
-            sleep(5);
+        uv_thread_t client_id;
+        uv_thread_create(&client_id, dns_client_run, NULL);
+        while (time_cnt++ < 400 && !flag ) // wait for query finish, timeout 
+            usleep(5 * 1000);   // us -> ms
+            
         if (time_cnt > 400) // 400 *5 = 2000ms
         {
-            PLOG(LWARN, "[Client]\tTimeout");
+            PLOG(LWARN, "[Client]\tTimeout\n");
             return NULL;
         }
-        PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
     }
 
     // Handle Results
@@ -488,4 +502,18 @@ DnsQRes *query_CNAME_res(const char *domain_name)
     }
     else
         return query_res(DNS_RRT_CNAME, domain_name);
+}
+
+DnsQRes *query_exp_res(const int type, const char *domain_name)
+{
+    DnsRR *cacheRR = check_cache(type, domain_name);
+    if (cacheRR != NULL)
+    {
+        DnsQRes *result = malloc(sizeof(DnsQRes));
+        result->rr = cacheRR;
+        result->rcode = DNS_RCODE_NOERR;
+        return result;
+    }
+    else
+        return query_res(type, domain_name);
 }

@@ -8,6 +8,7 @@
 
 extern uv_loop_t *loop;
 extern int BIND_IPV6;
+extern int ENABLE_EXP;
 extern char *BIND_ADDR;
 
 int dns_server_init();
