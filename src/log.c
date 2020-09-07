@@ -10,7 +10,7 @@ int PLOG(const int debug_level, const char *fmt, ...)
     va_list args;
     va_start(args, fmt);
     if (debug_level < DEBUG_LEVEL) // it's not important
-        return 0;
+        return 1;
 
     // get Time
     char tbuf[80];

@@ -286,10 +286,15 @@ void print_dns_packet(const DnsPacket *packet)
 
 void print_dns_raw(const char *raw_ptr, const int len)
 {
-    PLOG(LDEBUG, "[UNI]\t------ RAW CHAR ------\n");
+    if (PLOG(LDEBUG, "[UNI]\t------ RAW CHAR ------"))
+        return;
     for (int i = 0; i < len; i++)
+    {
+        if (i % 16 == 0)
+            printf("\n%04hhx ", i);
         printf("%02hhx ", raw_ptr[i]);
-    puts("");
+    }
+    printf("\n%04hhx\n", len - 1);
     PLOG(LDEBUG, "[UNI]\t------ END  RAW ------\n");
     return;
 }
