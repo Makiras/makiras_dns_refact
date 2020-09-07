@@ -151,6 +151,27 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header)
     return now_prt; // End at header end
 }
 
+char *_dns_rdata_name_encode(char *rdname)
+{
+    int len = strlen(rdname), tp = -1;
+    puts(rdname);
+    char *res = malloc(len + 2);
+    for (int i = 0, j = 1; i < len; i++, j++)
+    {
+        if (rdname[i] == '.')
+        {
+            res[j - i + tp] = i - tp - 1;
+            tp = i;
+            continue;
+        }
+        res[j] = rdname[i];
+    }
+    res[len] = 0;
+    res[len + 1] = '\0';
+    free(rdname);
+    return res;
+}
+
 char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
 {
     char *now_ptr = rr_ptr;
@@ -175,7 +196,30 @@ char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
         return now_ptr;
     rr->rdata = (uint8_t *)malloc(sizeof(uint8_t) * rr->rdlength);
     memcpy(rr->rdata, now_ptr, rr->rdlength);
-    return now_ptr + rr->rdlength;
+    char *name_temptr = now_ptr;
+    now_ptr += rr->rdlength;
+
+    if (rr->type == DNS_RRT_CNAME || rr->type == DNS_RRT_NS)
+    {
+        free(rr->rdata);
+        rr->rdata = _dns_rdata_name_encode(decode_RR_name(raw_pack, &name_temptr));
+        rr->rdlength = strlen(rr->rdata) + 1;
+    }
+    else if (rr->type == DNS_RRT_MX)
+    {
+        char *peref_ptr = name_temptr;
+        puts("DEBUG FOR MX");
+        free(rr->rdata);
+        name_temptr += 2;
+        char *mxname = _dns_rdata_name_encode(decode_RR_name(raw_pack, &name_temptr));
+        rr->rdlength = strlen(mxname) + 3;
+        rr->rdata = malloc(rr->rdlength);
+        *(short *)(rr->rdata) = *(short *)(peref_ptr);
+        memcpy(rr->rdata + 2, mxname, rr->rdlength - 2);
+        free(mxname);
+    }
+
+    return now_ptr;
 }
 
 // Free packet data after encode

@@ -83,6 +83,7 @@
 #define DNS_RRT_CNAME  5
 #define DNS_RRT_SOA  6
 #define DNS_RRT_PTR  12
+#define DNS_RRT_MX  15
 #define DNS_RRT_AAAA  28
 #define DNS_RRT_OPT  41
 #define DNS_RRT_ALL  255
