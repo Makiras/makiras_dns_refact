@@ -79,6 +79,29 @@ void dns_cache_init()
         }
         else // ipv6
         {
+            DnsRR *cache_res = rbtree_lookup(cacheTree, &(KEY){cbuff, DNS_RRT_AAAA}),
+                  *tba = malloc(sizeof(DnsRR));
+
+            // Construct DnsRR package
+            tba->name = malloc(strlen(cbuff) + 1);
+            memcpy(tba->name, cbuff, strlen(cbuff) + 1);
+            tba->type = DNS_RRT_AAAA;
+            tba->cls = DNS_RCLS_IN;
+            tba->ttl = -1; // unsigned to max
+            tba->rdlength = 16;
+            tba->rdata = malloc(16);
+            tba->next = NULL;
+            memset(tba->rdata, 0, 16);
+            uv_inet_pton(AF_INET6, cipbuff, tba->rdata);    // ipv6 readable str to uint_8 str 
+            // add into resolve
+            if (cache_res != NULL)
+            {
+                while (cache_res->next != NULL)
+                    cache_res = cache_res->next;
+                cache_res->next = tba;
+            }
+            else // new reslove
+                rbtree_insert(cacheTree, &(KEY){cbuff, DNS_RRT_AAAA}, tba);
         }
     }
 
@@ -200,7 +223,7 @@ DnsRR *check_cache(int qtype, const char *domain_name)
         return NULL;
     }
 
-    PLOG(LINFO, "[Cache]\tHIT!");
+    PLOG(LINFO, "[Cache]\tHIT!\n");
     DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
     while (cache_res->next != NULL)
     {
