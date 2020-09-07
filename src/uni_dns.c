@@ -119,9 +119,9 @@ void _dns_decode_packet(char *raw_pack, DnsPacket *packet)
         tp_qdc--;
         print_dns_packet(packet);
     }
-    PLOG(LDEBUG, "[UNI]\t_dns_decode_packet free");
+    PLOG(LDEBUG, "[UNI]\t_dns_decode_packet free\n");
     free(raw_pack);
-    PLOG(LDEBUG, "[UNI]\t_dns_decode_packet END");
+    PLOG(LDEBUG, "[UNI]\t_dns_decode_packet END\n");
     return; // End at packet end
 }
 
@@ -163,7 +163,7 @@ char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
     now_ptr = _read_uint16(now_ptr, &(rr->cls));
     if (is_qd)
     {
-        PLOG(LDEBUG, "[UNI]\tIS_QD");
+        PLOG(LDEBUG, "[UNI]\tQuery Resource Records, next\n");
         rr->ttl = -1;
         rr->rdlength = -1;
         rr->rdata = NULL;

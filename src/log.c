@@ -4,7 +4,7 @@
 
 extern int DEBUG_LEVEL;
 
-char *debug_str[] = {"ALL INFO","  DEBUG ", "  INFO  ", "  WARN  ", "CRITICAL", "  ERROR "};
+char *debug_str[] = {"ALL INFO", "  DEBUG ", "  INFO  ", "  WARN  ", "CRITICAL", "  ERROR "};
 int PLOG(const int debug_level, const char *fmt, ...)
 {
     va_list args;
@@ -17,7 +17,7 @@ int PLOG(const int debug_level, const char *fmt, ...)
     time_t now_tmt;
     now_tmt = time(NULL);
     strftime(tbuf, 80, "%H:%M:%S", localtime(&now_tmt));
-    printf("%s", tbuf);
+    printf("%s ", tbuf);
 
     // print debug info
     printf("[%s]", debug_str[debug_level]);

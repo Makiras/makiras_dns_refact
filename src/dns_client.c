@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <time.h>
 struct sockaddr_in addr, send_addr;
+static uv_udp_t send_socket;
 static uv_buf_t client_buf;
 static uv_udp_send_t client_req;
 
@@ -156,9 +157,11 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
     int length = 0;
     if (curl)
     {
-        char query_str[DNS_MAX_PACK_SIZE] = "https://dns.alidns.com/dns-query?dns=";
-        strncpy(query_str + 37, raw_base64url, strlen(raw_base64url));
-        query_str[37 + strlen(raw_base64url)] = '\0';
+        char query_str[DNS_MAX_PACK_SIZE]; // = "https://dns.alidns.com/dns-query?dns=";
+        memcpy(query_str, DOT_SERVER, strlen(DOT_SERVER));
+        strncpy(query_str + strlen(DOT_SERVER), raw_base64url, strlen(raw_base64url));
+        query_str[strlen(DOT_SERVER) + strlen(raw_base64url)] = '\0';
+        PLOG(LDEBUG, "[Client]\tCurl Handle URL %s\n", query_str);
         free(raw_base64url);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1);
@@ -169,7 +172,7 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
 
         res = curl_easy_perform(curl);
         packet_res_buffer[length] = '\0';
-        PLOG(LDEBUG, "[Client]\t Curl Handle Length %d\n", length);
+        PLOG(LDEBUG, "[Client]\tCurl Handle Length %d\n", length);
         print_dns_raw(packet_res_buffer, length);
 
         /* Check for errors */
@@ -308,7 +311,7 @@ DnsPacket *query_packet_init()
     req_pack->header.qdcount = 1;
     req_pack->header.ancount = 0;
     req_pack->header.nscount = 0;
-    req_pack->header.arcount = 0; // DNS OPT
+    req_pack->header.arcount = (ENABLE_DNSOPT > 0); // DNS OPT
     return req_pack;
 }
 
@@ -321,7 +324,10 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     PLOG(LDEBUG, "[Client]\tQuery RR name :%s", qd_RR->name);
     qd_RR->type = qtype;
     qd_RR->cls = qclass;
+    qd_RR->next = NULL;
 
+    if (!ENABLE_DNSOPT)
+        return;
     // DNS OPT
     DnsRR *eRR = (qd_RR->next) = (DnsRR *)malloc(sizeof(DnsRR));
     eRR->name = malloc(1);
@@ -339,7 +345,7 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     temptr += 2;
     *(uint16_t *)temptr = htons(1); //FAMILY： 2个字节，1表示ipv4, 2表示ipv6
     temptr += 2;
-    *(uint16_t *)temptr = htons((24 << 8));
+    *(uint16_t *)temptr = htons((24 << 8) | 24); // SOURCE|SCOPE NETMASE
     temptr += 2;
     *(uint32_t *)temptr = htonl((((((123 << 8) + 112) << 8) + 15) << 8) + 154);
     return qd_RR;
@@ -373,22 +379,26 @@ DnsQRes *query_res(const int type, const char *domain_name)
 
     // Prepare sending data
     int data_len = bias - packet_raw_buffer, time_cnt = 0;
-    client_buf = uv_buf_init(packet_raw_buffer, data_len);
-    flag = curl_query_doh(packet_raw_buffer, data_len);
 
     // Sending & Waiting (multi-thread)
-    // dns_client_init();
-    // uv_ip4_addr("223.5.5.5", 53, &send_addr);
-    // int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
-    // uv_run(client_loop, UV_RUN_DEFAULT);
-    // while (!flag && time_cnt++ < 400) // wait for query finish, timeout
-    //     sleep(5);
-    // if (time_cnt > 400) // 400 *5 = 2000ms
-    // {
-    //     PLOG(LWARN, "[Client]\tTimeout");
-    //     return NULL;
-    // }
-    // PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    if (ENABLE_DOT)
+        flag = curl_query_doh(packet_raw_buffer, data_len);
+    else
+    {
+        client_buf = uv_buf_init(packet_raw_buffer, data_len);
+        dns_client_init();
+        uv_ip4_addr(DNS_SERVER, 53, &send_addr);
+        int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
+        uv_run(client_loop, UV_RUN_DEFAULT);
+        while (!flag && time_cnt++ < 400) // wait for query finish, timeout
+            sleep(5);
+        if (time_cnt > 400) // 400 *5 = 2000ms
+        {
+            PLOG(LWARN, "[Client]\tTimeout");
+            return NULL;
+        }
+        PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    }
 
     // Handle Results
     char *raw_pack = (char *)malloc(flag * sizeof(char));

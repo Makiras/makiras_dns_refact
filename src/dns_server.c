@@ -1,6 +1,7 @@
 #include "dns_server.h"
 #include "uni_dns.h"
 
+static uv_udp_t recv_socket;
 char send_buffer[DNS_MAX_PACK_SIZE];
 
 DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t nread);
@@ -149,8 +150,8 @@ int dns_server_init()
     PLOG(LINFO, "[Server]\tStart Dns Server\n");
     uv_udp_init(loop, &recv_socket);
     struct sockaddr_in recv_addr;
-    PLOG(LDEBUG, "[Server]\tBind Addr %s\n", bind_address);
-    uv_ip4_addr(bind_address, 53, &recv_addr);
+    PLOG(LDEBUG, "[Server]\tBind Addr %s\n", BIND_ADDR);
+    uv_ip4_addr(BIND_ADDR, 53, &recv_addr);
     uv_udp_bind(&recv_socket, (const struct sockaddr *)&recv_addr, UV_UDP_REUSEADDR);
     uv_udp_recv_start(&recv_socket, alloc_cb, dns_recv_cb);
     return 0;

@@ -9,10 +9,14 @@
 
 uv_loop_t *loop, *client_loop;
 extern uv_udp_t send_socket;
-extern uv_udp_t recv_socket;
+extern char *DNS_SERVER;
+extern char *DOT_SERVER;
+extern char *BIND_ADDR;
+extern int ENABLE_DOT;
+extern int ENABLE_DNSOPT;
+extern int BIND_IPV6;
 extern int DEBUG_LEVEL;
-
-char *bind_address = "0.0.0.0";
+extern uv_udp_t recv_socket;
 
 void init_client_loop()
 {

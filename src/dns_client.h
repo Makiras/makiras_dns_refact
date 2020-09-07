@@ -18,8 +18,12 @@
 #include "uni_dns.h"
 #include "udefine.h"
 
-static uv_udp_t send_socket;
 extern uv_loop_t *client_loop;
+
+extern int ENABLE_DNSOPT;
+extern char *DOT_SERVER;
+extern char *DNS_SERVER;
+extern int ENABLE_DOT;
 
 typedef struct DnsQRes{
     DnsRR* rr;
