@@ -14,6 +14,7 @@
 #include <curl/curl.h>
 #include <stdio.h>
 #include <time.h>
+
 struct sockaddr_in addr, send_addr;
 static uv_udp_t send_socket;
 static uv_buf_t client_buf;
@@ -22,7 +23,7 @@ static uv_udp_send_t client_req;
 rbtree *cacheTree;
 char *buffer_rec;
 const char b64chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-int sent_pack_id = 0, flag = 0;
+int sent_pack_id = 0, flag = 0, keep_lock = 0;
 char packet_raw_buffer[DNS_MAX_PACK_SIZE], packet_res_buffer[DNS_MAX_PACK_SIZE];
 
 void dns_cache_init()
@@ -30,10 +31,10 @@ void dns_cache_init()
     PLOG(LINFO, "[Cache]\tStart Dns Cache Init\n");
 
     cacheTree = rbtree_init(rb_compare);
+    // Handle Host File
     FILE *fp = fopen("relay.txt", "r");
     if (fp == NULL)
         return;
-
     char cbuff[DNS_NSD_LEN_CNAME], cipbuff[DNS_NSD_LEN_CNAME / 2];
     while (fscanf(fp, "%s", cbuff) != EOF)
     {
@@ -92,7 +93,7 @@ void dns_cache_init()
             tba->rdata = malloc(16);
             tba->next = NULL;
             memset(tba->rdata, 0, 16);
-            uv_inet_pton(AF_INET6, cipbuff, tba->rdata);    // ipv6 readable str to uint_8 str 
+            uv_inet_pton(AF_INET6, cipbuff, tba->rdata); // ipv6 readable str to uint_8 str
             // add into resolve
             if (cache_res != NULL)
             {
@@ -105,6 +106,93 @@ void dns_cache_init()
         }
     }
 
+    fclose(fp);
+    fp = fopen("keep.txt", "r");
+    if (fp == NULL)
+        return;
+    PLOG(LINFO, "[Cache]\tRecover Dns Cache\n");
+    keep_lock = 1;
+    int ttl, addtime;
+    while (fscanf(fp, "%s", cbuff) != EOF)
+    {
+        fscanf(fp, "%s", cipbuff);
+        fscanf(fp, "%d %d", &ttl, &addtime);
+        if (cbuff[strlen(cbuff) - 1] != '.')
+        {
+            cbuff[strlen(cbuff) + 1] = '\0';
+            cbuff[strlen(cbuff)] = '.';
+        }
+        PLOG(LDEBUG, "[Cache]\tRead host for %s,%s , add at %d, ttl %d\n", cbuff, cipbuff, addtime, ttl);
+        if (time(NULL) - addtime > ttl) // expired
+            continue;
+        if (strrchr(cipbuff, ':') == NULL) // ipv4
+        {
+
+            DnsRR *cache_res = rbtree_lookup(cacheTree, &(KEY){cbuff, DNS_RRT_A}),
+                  *tba = malloc(sizeof(DnsRR));
+
+            // Construct DnsRR package
+            tba->name = malloc(strlen(cbuff) + 1);
+            memcpy(tba->name, cbuff, strlen(cbuff) + 1);
+            tba->addT = addtime;
+            tba->type = DNS_RRT_A;
+            tba->cls = DNS_RCLS_IN;
+            tba->ttl = ttl; // unsigned to max
+            tba->rdlength = 4;
+            tba->rdata = malloc(4);
+            tba->next = NULL;
+            memset(tba->rdata, 0, 4);
+            for (int ipi = 0, rdi = 0; ipi < strlen(cipbuff); ipi++) // cover str to ipv4 addr
+            {
+                if (cipbuff[ipi] == '.' && ++rdi)
+                    continue;
+                tba->rdata[rdi] = tba->rdata[rdi] * 10 + cipbuff[ipi] - '0';
+            }
+
+            // add into resolve
+            if (cache_res != NULL)
+            {
+                while (cache_res->next != NULL)
+                    cache_res = cache_res->next;
+                cache_res->next = tba;
+            }
+            else // new reslove
+                rbtree_insert(cacheTree, &(KEY){cbuff, DNS_RRT_A}, tba);
+        }
+        else // ipv6
+        {
+            DnsRR *cache_res = rbtree_lookup(cacheTree, &(KEY){cbuff, DNS_RRT_AAAA}),
+                  *tba = malloc(sizeof(DnsRR));
+
+            // Construct DnsRR package
+            tba->name = malloc(strlen(cbuff) + 1);
+            memcpy(tba->name, cbuff, strlen(cbuff) + 1);
+            tba->addT = addtime;
+            tba->type = DNS_RRT_AAAA;
+            tba->cls = DNS_RCLS_IN;
+            tba->ttl = ttl; // unsigned to max
+            tba->rdlength = 16;
+            tba->rdata = malloc(16);
+            tba->next = NULL;
+            memset(tba->rdata, 0, 16);
+            uv_inet_pton(AF_INET6, cipbuff, tba->rdata); // ipv6 readable str to uint_8 str
+            // add into resolve
+            if (cache_res != NULL)
+            {
+                while (cache_res->next != NULL)
+                    cache_res = cache_res->next;
+                cache_res->next = tba;
+            }
+            else // new reslove
+                rbtree_insert(cacheTree, &(KEY){cbuff, DNS_RRT_AAAA}, tba);
+        }
+    }
+    keep_lock = 0;
+    fclose(fp);
+
+    fp = fopen("keep.txt", "w+"); // clear file
+    if (fp == NULL)
+        return;
     fclose(fp);
     return;
 }
@@ -186,6 +274,8 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
         query_str[strlen(DOT_SERVER) + strlen(raw_base64url)] = '\0';
         PLOG(LDEBUG, "[Client]\tCurl Handle URL %s\n", query_str);
         free(raw_base64url);
+        struct curl_slist *host_list_ = curl_slist_append(NULL, "cloudflare-dns.com:443:104.16.248.249");
+        curl_easy_setopt(curl, CURLOPT_RESOLVE, host_list_);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 1);
         curl_easy_setopt(curl, CURLOPT_URL, query_str);
@@ -200,7 +290,11 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
 
         /* Check for errors */
         if (res != CURLE_OK)
-            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        {
+            PLOG(LCRITICAL, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+            curl_easy_cleanup(curl);
+            return -1;
+        }
 
         /* always cleanup */
         curl_easy_cleanup(curl);
@@ -208,7 +302,6 @@ int curl_query_doh(const unsigned char *inBi, size_t len)
     return length;
 }
 
-//todo: cache
 DnsRR *check_cache(int qtype, const char *domain_name)
 {
     PLOG(LINFO, "[Cache]\tQuery cache for %s type %d\n", domain_name, qtype);
@@ -236,10 +329,41 @@ DnsRR *check_cache(int qtype, const char *domain_name)
     return ret;
 }
 
+void writeRR2file(const DnsRR *rr)
+{
+    FILE *fp = fopen("keep.txt", "a");
+    char addr_readable[128];
+    while (rr != NULL)
+    {
+        if (rr->type != DNS_RRT_A && rr->type != DNS_RRT_AAAA)
+        {
+            rr = rr->next;
+            continue;
+        }
+        if (rr->type == DNS_RRT_A) //v4
+        {
+            uv_inet_ntop(AF_INET, rr->rdata, addr_readable, 128);
+            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->addT, rr->ttl);
+        }
+        else //v6
+        {
+            uv_inet_ntop(AF_INET6, rr->rdata, addr_readable, 128);
+            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->addT, rr->ttl);
+        }
+        fflush(fp);
+        rr = rr->next;
+    }
+    if (fp == NULL)
+        return;
+    fclose(fp);
+    return;
+}
+
 void add_cache(int qtype, const char *domain_name, const DnsRR *dnsRR)
 {
     PLOG(LINFO, "[Cache]\tAdd cache for %s type %d\n", domain_name, qtype);
     DnsRR *ret = malloc(sizeof(DnsRR)), *temp = ret;
+    writeRR2file(dnsRR);
     while (dnsRR->next != NULL)
     {
         dnsRRdcpy(dnsRR, temp);
@@ -317,7 +441,6 @@ int dns_client_init()
     uv_udp_init(client_loop, &send_socket);
     uv_udp_bind(&send_socket, (const struct sockaddr *)&addr, UV_UDP_REUSEADDR);
     uv_udp_set_broadcast(&send_socket, 1); // libuv通过0.0.0.0发数据的权限限制，如果不加会异常
-    flag = 0;                              // 是否处理完
     return 0;
 }
 
@@ -344,13 +467,13 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     qd_RR->name = (char *)malloc(strlen(qname) + 1);
     strncpy(qd_RR->name, qname, strlen(qname));
     qd_RR->name[strlen(qname)] = '\0';
-    PLOG(LDEBUG, "[Client]\tQuery RR name :%s", qd_RR->name);
+    PLOG(LDEBUG, "[Client]\tQuery RR name :%s\n", qd_RR->name);
     qd_RR->type = qtype;
     qd_RR->cls = qclass;
     qd_RR->next = NULL;
 
     if (!ENABLE_DNSOPT)
-        return;
+        return qd_RR;
     // DNS OPT
     DnsRR *eRR = (qd_RR->next) = (DnsRR *)malloc(sizeof(DnsRR));
     eRR->name = malloc(1);
@@ -368,10 +491,20 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     temptr += 2;
     *(uint16_t *)temptr = htons(1); //FAMILY： 2个字节，1表示ipv4, 2表示ipv6
     temptr += 2;
-    *(uint16_t *)temptr = htons((24 << 8) | 24); // SOURCE|SCOPE NETMASE
+    *(uint16_t *)temptr = htons((24 << 8)); // SOURCE|SCOPE NETMASE
     temptr += 2;
     *(uint32_t *)temptr = htonl((((((123 << 8) + 112) << 8) + 15) << 8) + 154);
     return qd_RR;
+}
+
+void dns_client_run()
+{
+    dns_client_init();
+    uv_ip4_addr(DNS_SERVER, 53, &send_addr);
+    int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
+    uv_run(client_loop, UV_RUN_DEFAULT);
+    PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
+    return;
 }
 
 DnsQRes *query_res(const int type, const char *domain_name)
@@ -390,7 +523,10 @@ DnsQRes *query_res(const int type, const char *domain_name)
         qd_packet->records = query_RR_init(domain_name, DNS_RRT_CNAME, DNS_RCLS_IN);
         break;
     default:
-        return NULL;
+        if (ENABLE_EXP)
+            qd_packet->records = query_RR_init(domain_name, type, DNS_RCLS_IN);
+        else
+            return NULL;
         break;
     }
     print_dns_packet(qd_packet);
@@ -402,25 +538,23 @@ DnsQRes *query_res(const int type, const char *domain_name)
 
     // Prepare sending data
     int data_len = bias - packet_raw_buffer, time_cnt = 0;
+    client_buf = uv_buf_init(packet_raw_buffer, data_len);
 
     // Sending & Waiting (multi-thread)
     if (ENABLE_DOT)
         flag = curl_query_doh(packet_raw_buffer, data_len);
-    else
+    if (!ENABLE_DOT || flag == -1)
     {
-        client_buf = uv_buf_init(packet_raw_buffer, data_len);
-        dns_client_init();
-        uv_ip4_addr(DNS_SERVER, 53, &send_addr);
-        int r = uv_udp_send(&client_req, &send_socket, &client_buf, 1, &send_addr, cl_send_cb);
-        uv_run(client_loop, UV_RUN_DEFAULT);
-        while (!flag && time_cnt++ < 400) // wait for query finish, timeout
-            sleep(5);
-        if (time_cnt > 400) // 400 *5 = 2000ms
+        uv_thread_t client_id;
+        flag = 0; // in main threads for sync
+        uv_thread_create(&client_id, dns_client_run, NULL);
+        while (time_cnt++ < 400 && !flag) // wait for query finish, timeout
+            usleep(5 * 1000);             // us -> ms
+        if (time_cnt > 400)               // 400 *5 = 2000ms
         {
-            PLOG(LWARN, "[Client]\tTimeout");
+            PLOG(LWARN, "[Client]\tTimeout\n");
             return NULL;
         }
-        PLOG(LDEBUG, "[Client]\tuv_udp_send %s\n", r ? "NOERR" : uv_strerror(r));
     }
 
     // Handle Results
@@ -488,4 +622,18 @@ DnsQRes *query_CNAME_res(const char *domain_name)
     }
     else
         return query_res(DNS_RRT_CNAME, domain_name);
+}
+
+DnsQRes *query_exp_res(const int type, const char *domain_name)
+{
+    DnsRR *cacheRR = check_cache(type, domain_name);
+    if (cacheRR != NULL)
+    {
+        DnsQRes *result = malloc(sizeof(DnsQRes));
+        result->rr = cacheRR;
+        result->rcode = DNS_RCODE_NOERR;
+        return result;
+    }
+    else
+        return query_res(type, domain_name);
 }

@@ -55,7 +55,7 @@ typedef struct dns_header
 typedef struct dns_rr
 {
   struct dns_rr *next;
-  uint64_t addT;  // not used for now
+  uint64_t addT;  // add time for ttl use
   uint8_t *name; // dynamic length name
   uint16_t type; // Resource Record Type (16 bit)
   uint16_t cls;

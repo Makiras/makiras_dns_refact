@@ -6,6 +6,7 @@ char *DOT_SERVER;
 char *BIND_ADDR;
 int ENABLE_DOT;
 int ENABLE_DNSOPT;
+int ENABLE_EXP;
 int BIND_IPV6;
 int DEBUG_LEVEL;
 
@@ -70,24 +71,31 @@ int init_config()
         }
         else if (strcmp(bkey, "enable_dot") == 0)
         {
-            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1" == 0))
+            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1") == 0)
                 ENABLE_DOT = 1;
             else
                 ENABLE_DOT = 0;
         }
         else if (strcmp(bkey, "enable_dnsopt") == 0)
         {
-            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1" == 0))
+            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1") == 0)
                 ENABLE_DNSOPT = 1;
             else
                 ENABLE_DNSOPT = 0;
         }
         else if (strcmp(bkey, "bind_ipv6") == 0)
         {
-            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1" == 0))
+            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1") == 0)
                 BIND_IPV6 = 1;
             else
                 BIND_IPV6 = 0;
+        }
+        else if (strcmp(bkey, "enable_exp") == 0)
+        {
+            if (strcmp(bvalue, "true") == 0 || strcmp(bvalue, "1") == 0)
+                ENABLE_EXP = 1;
+            else
+                ENABLE_EXP = 0;
         }
         else if (strcmp(bkey, "debug_level") == 0)
         {

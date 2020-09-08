@@ -64,28 +64,32 @@ DnsQRes *handle_qd_rr(const DnsRR *rr_ptr)
         return query_A_res(rr_ptr->name);
         break;
     case DNS_RRT_NS:
-        /* code */
         break;
     case DNS_RRT_CNAME:
         PLOG(LINFO, "[Server]\tHandel CNAME req for %s\n", rr_ptr->name);
         return query_CNAME_res(rr_ptr->name);
         break;
     case DNS_RRT_SOA:
-        /* code */
         break;
     case DNS_RRT_PTR:
-        PLOG(LINFO, "[Server]\t[todo!]Handel PTR req for %s\n", rr_ptr->name);
+        PLOG(LINFO, "[Server]\tDO NOT Handel PTR req for %s, SPEED UP\n", rr_ptr->name);
+        return NULL;
         break;
     case DNS_RRT_AAAA:
         PLOG(LINFO, "[Server]\tHandel AAAA req for %s\n", rr_ptr->name);
         return query_AAAA_res(rr_ptr->name);
         break;
     case DNS_RRT_ALL:
-        /* code */
         break;
     default:
         break;
     }
+    if (ENABLE_EXP)
+    {
+        PLOG(LINFO, "[Server]\tHandel experimental req for %s\n", rr_ptr->name);
+        return query_exp_res(rr_ptr->type, rr_ptr->name);
+    }
+
     return NULL;
 }
 
