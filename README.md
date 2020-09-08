@@ -41,3 +41,11 @@ make clean
 ### Linux
 
 TBD
+
+
+## TBD (5e8 years later)*
+
+1. DoT / DoH(bind)
+2. Multi Resolver
+3. Random Crash 
+4. "real" Eventloop
