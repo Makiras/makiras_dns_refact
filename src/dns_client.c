@@ -343,12 +343,12 @@ void writeRR2file(const DnsRR *rr)
         if (rr->type == DNS_RRT_A) //v4
         {
             uv_inet_ntop(AF_INET, rr->rdata, addr_readable, 128);
-            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->addT, rr->ttl);
+            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->ttl, rr->addT);
         }
         else //v6
         {
             uv_inet_ntop(AF_INET6, rr->rdata, addr_readable, 128);
-            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->addT, rr->ttl);
+            fprintf(fp, "%s %s %d %d\n", rr->name, addr_readable, rr->ttl, rr->addT);
         }
         fflush(fp);
         rr = rr->next;
@@ -493,7 +493,7 @@ DnsRR *query_RR_init(const char *qname, cshort qtype, cshort qclass)
     temptr += 2;
     *(uint16_t *)temptr = htons((24 << 8)); // SOURCE|SCOPE NETMASE
     temptr += 2;
-    *(uint32_t *)temptr = htonl((((((123 << 8) + 112) << 8) + 15) << 8) + 154);
+    *(uint32_t *)temptr = htonl((((((116 << 8) + 53) << 8) + 237) << 8) + 85);
     return qd_RR;
 }
 
@@ -510,6 +510,7 @@ void dns_client_run()
 DnsQRes *query_res(const int type, const char *domain_name)
 {
     // Init packet data
+    puts("Query Res");
     DnsPacket *qd_packet = query_packet_init();
     switch (type)
     {
@@ -575,6 +576,15 @@ DnsQRes *query_res(const int type, const char *domain_name)
     }
     result->rr = now_rr;
     result->rcode = req_packet->header.rcode;
+    // while (now_rr != NULL)
+    // {
+    //     if (now_rr->type == DNS_RRT_A && now_rr->rdata != NULL && (*(int *)now_rr->rdata) == 0)
+    //     {
+    //         result->rcode = DNS_RCODE_NXDOMAIN;
+    //         break;
+    //     }
+    //     now_rr = now_rr->next;
+    // }
     if (result->rcode == DNS_RCODE_NOERR)
         add_cache(type, domain_name, result->rr);
     free(req_packet);
@@ -590,6 +600,15 @@ DnsQRes *query_A_res(const char *domain_name)
         DnsQRes *result = malloc(sizeof(DnsQRes));
         result->rr = cacheRR;
         result->rcode = DNS_RCODE_NOERR;
+        while (cacheRR != NULL)
+        {
+            if (cacheRR->type == DNS_RRT_A && cacheRR->rdata != NULL && (*(int *)cacheRR->rdata) == 0)
+            {
+                result->rcode = DNS_RCODE_NXDOMAIN;
+                break;
+            }
+            cacheRR = cacheRR->next;
+        }
         return result;
     }
     else

@@ -11,6 +11,7 @@
 
 #include "uni_dns.h"
 #include <string.h>
+#include <time.h>
 
 char *_read_uint16(char *ptr, uint16_t *value)
 {
@@ -154,7 +155,7 @@ char *_dns_decode_header(char *header_ptr, DnsHeader *header)
 char *_dns_rdata_name_encode(char *rdname)
 {
     int len = strlen(rdname), tp = -1;
-    puts(rdname);
+    PLOG(LDEBUG, "[Rdata Domain]%s\n",rdname);
     char *res = malloc(len + 2);
     for (int i = 0, j = 1; i < len; i++, j++)
     {
@@ -191,6 +192,7 @@ char *_dns_decode_RR(char *raw_pack, char *rr_ptr, DnsRR *rr, int is_qd)
         return now_ptr;
     }
     now_ptr = _read_uint32(now_ptr, &(rr->ttl));
+    rr->addT = time(NULL);
     now_ptr = _read_uint16(now_ptr, &(rr->rdlength));
     if (rr->rdlength == 0)
         return now_ptr;

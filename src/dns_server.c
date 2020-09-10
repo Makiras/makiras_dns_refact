@@ -139,6 +139,22 @@ DnsPacket *handle_dns_req(const char *rcvbuf, const char *ipaddr, const ssize_t 
 
         now_rr_ptr = now_rr_ptr->next;
     }
+    if (req_packet->header.rcode == DNS_RCODE_NXDOMAIN)
+    {
+        now_rr_ptr = req_packet->records;
+        for (int i = 0; i < req_packet->header.qdcount - 1; i++)
+            now_rr_ptr = now_rr_ptr->next;
+        result_rr = now_rr_ptr->next;
+        now_rr_ptr->next = NULL;
+        while (result_rr != NULL)
+        {
+            now_rr_ptr = result_rr;
+            result_rr = result_rr->next;
+            free(now_rr_ptr);
+        }
+        req_packet->header.ancount = req_packet->header.arcount = 0;
+    }
+
     packet2response(req_packet); //, now_rr_ptr != NULL);
 
     // Debug handle Result
