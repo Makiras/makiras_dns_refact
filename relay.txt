@@ -1,6 +1,4 @@
 test.com 0.0.0.0
-test.com 0.0.0.1
 makiras.com 1.2.3.4
 makiras.com 1.2.3.5
 bupt.edu.cn 0.0.0.0
-bupt.edu.cn fe80::01
